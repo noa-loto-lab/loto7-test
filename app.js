@@ -49,7 +49,6 @@
   buildRow(headRow, '開催回', function (c) { return el(colClass(c), c); });
 
   var tableRows = document.getElementById('table-rows');
-  var tableScroll = document.getElementById('table-scroll');
   // 履歴表を作り直す(古い回が先頭=上、新しい回が最後=下)。サンプルもCSVも同じ処理を使う
   function renderHistory(list) {
     tableRows.textContent = '';
@@ -92,41 +91,7 @@
     }, { passive: true });
   });
 
-  // ---- タッチスクロールの方向固定 ----
-  // iPhoneで斜めに流れるのを防ぐ。最初の移動方向を判定し、その指の操作中は一軸だけ動かす。
-  (function installAxisLockedScroll() {
-    var startX = 0, startY = 0, lastX = 0, lastY = 0, axis = null, tracking = false;
-    tableScroll.addEventListener('touchstart', function (e) {
-      if (!e.touches || e.touches.length !== 1) { tracking = false; return; }
-      var t = e.touches[0];
-      startX = lastX = t.clientX;
-      startY = lastY = t.clientY;
-      axis = null;
-      tracking = true;
-    }, { passive: true });
-    tableScroll.addEventListener('touchmove', function (e) {
-      if (!tracking || !e.touches || e.touches.length !== 1) return;
-      var t = e.touches[0], dx = t.clientX - startX, dy = t.clientY - startY;
-      if (!axis && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
-        axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
-        // 判定後はブラウザ標準の二軸スクロールを止め、選んだ軸だけ手動で動かす。
-      }
-      if (!axis) return;
-      if (e.cancelable) e.preventDefault();
-      if (axis === 'x') {
-        var moveX = lastX - t.clientX;
-        tableScroll.scrollLeft += moveX;
-        scrollers[0].scrollLeft = scrollers[2].scrollLeft = tableScroll.scrollLeft;
-      } else {
-        tableScroll.scrollTop += lastY - t.clientY;
-      }
-      lastX = t.clientX;
-      lastY = t.clientY;
-    }, { passive: false });
-    function stop() { tracking = false; axis = null; }
-    tableScroll.addEventListener('touchend', stop, { passive: true });
-    tableScroll.addEventListener('touchcancel', stop, { passive: true });
-  })();
+  // タッチ方向固定は一旦無効化。まず標準スクロールとタップ操作を優先する。
 
   // ---- 数字選択(第2段階) ----
   var MAX_SELECT = 7;
