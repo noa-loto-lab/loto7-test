@@ -109,6 +109,7 @@
     Object.keys(selected).map(Number).sort(function (a, b) { return a - b; }).forEach(function (v) {
       pickedEl.appendChild(el('chip', v));
     });
+    pickedEl.scrollLeft = 0;  // 選択数字の先頭から表示。7個すべてを同時表示する
     Array.prototype.forEach.call(predRow.querySelectorAll('.cell[data-n]'), function (cell) {
       var on = !!selected[cell.dataset.n];
       cell.classList.toggle('sel', on);
@@ -155,10 +156,21 @@
       if (tableScroll.scrollLeft !== left) tableScroll.scrollLeft = left;
     });
   });
+  // ---- 横スクロールのみ切り替え(初期OFF) ----
+  var horizontalToggle = document.getElementById('horizontal-toggle');
+  var horizontalOnly = false;
+  horizontalToggle.addEventListener('click', function () {
+    horizontalOnly = !horizontalOnly;
+    tableScroll.classList.toggle('horizontal-only', horizontalOnly);
+    horizontalToggle.textContent = horizontalOnly ? '横のみ ON' : '横のみ OFF';
+    horizontalToggle.setAttribute('aria-pressed', horizontalOnly ? 'true' : 'false');
+    // OFFへ戻した場合も、既存のスクロール位置を維持する
+  });
+
   // ---- 拡大・縮小(操作行は対象外) ----
   // transformは使わず、CSS変数 --z で列幅・行高・文字サイズを実寸で変える。
   var ZOOMS = [40, 50, 60, 70, 80, 90, 100, 120, 140];   // %
-  var zi = 6;                                           // 初期 100%
+  var zi = 0;                                           // 初期 40%
   var zoomOut = document.getElementById('zoom-out');
   var zoomIn = document.getElementById('zoom-in');
   var zoomVal = document.getElementById('zoom-val');
@@ -184,6 +196,9 @@
   zoomOut.addEventListener('click', function () { setZoom(zi - 1); });
   zoomIn.addEventListener('click', function () { setZoom(zi + 1); });
   zoomVal.textContent = ZOOMS[zi] + '%';
+  document.documentElement.style.setProperty('--z', ZOOMS[zi] / 100);
+  zoomOut.disabled = zi === 0;
+  zoomIn.disabled = zi === ZOOMS.length - 1;
 
   // ---- 色設定(本数字・ボーナス数字の色。localStorageに保存) ----
   var DEFAULT_COLORS = { main: '#d3202c', bonus: '#1f5fd1' };

@@ -147,22 +147,21 @@ body { position: fixed; inset: 0; width: 100%; }
 #count.bump { animation: bump .25s; }
 @keyframes bump { 30% { transform: translateX(-4px); } 60% { transform: translateX(4px); } }
 
-/* 選択した数字:小さなラベル。収まらないときは横スクロール(2行にはしない) */
+/* 選択した数字:7個すべてを同時表示。内部スクロールは使わない */
 #picked {
-  flex: 1 1 0;
-  min-width: 0;
+  flex: 0 0 190px;
+  width: 190px;
+  min-width: 190px;
   display: flex;
   align-items: center;
   gap: 3px;
-  overflow-x: auto;
-  scrollbar-width: none;
+  overflow: hidden;
 }
-#picked::-webkit-scrollbar { display: none; }
 .chip {
-  flex: none;
-  min-width: 20px;
+  flex: 1 1 0;
+  min-width: 0;
   height: 18px;
-  padding: 0 4px;
+  padding: 0 2px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -174,7 +173,7 @@ body { position: fixed; inset: 0; width: 100%; }
   font-variant-numeric: tabular-nums;
 }
 
-#clear-btn, #latest-btn, #zoom-out, #zoom-in, #color-btn, #csv-btn {
+#clear-btn, #latest-btn, #zoom-out, #zoom-in, #color-btn, #csv-btn, #horizontal-toggle {
   position: relative;
   flex: none;
   height: 30px;      /* ボタン自体を十分な高さにする(::afterでの拡張はしない) */
@@ -193,6 +192,10 @@ body { position: fixed; inset: 0; width: 100%; }
 #clear-btn:active:not(:disabled), #latest-btn:active, #zoom-out:active:not(:disabled), #zoom-in:active:not(:disabled), #color-btn:active, #csv-btn:active { background: var(--line); }
 #color-btn[aria-expanded="true"] { background: var(--ink); color: #fff; }
 #clear-btn:disabled, #zoom-out:disabled, #zoom-in:disabled { opacity: .35; }
+#horizontal-toggle[aria-pressed="true"] { background: var(--ink); color: #fff; }
+#horizontal-toggle:active { background: var(--line); }
+/* ONでは過去の出目表を横方向だけ操作可能にする */
+#table-scroll.horizontal-only { overflow-x: auto; overflow-y: hidden; touch-action: pan-x; }
 @media (prefers-reduced-motion: reduce) { #count.bump { animation: none; } }
 @media (max-width: 700px) { #count-label { display: none; } }   /* 狭い画面では1行に収めるため「選択数」の文字を省く */
 
