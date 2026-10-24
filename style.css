@@ -130,16 +130,19 @@ body { position: fixed; inset: 0; width: 100%; }
 #status-bar {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   padding: 7px 8px 3px;   /* 上端から離す(画面の最上端付近はタップが効きにくい) */
-  overflow: hidden;
+  overflow-x: auto;       /* 縦向きなど狭い画面では操作行だけ横にスクロールして全ボタンに届くようにする */
+  overflow-y: hidden;
+  scrollbar-width: none;
   background: var(--paper);
   border-bottom: 1px solid var(--line);
   font-size: 12px;
   white-space: nowrap;
 }
+#status-bar::-webkit-scrollbar { display: none; }
 #count-label { flex: none; }
-#count { flex: none; font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; min-width: 3.4em; }
+#count { flex: none; font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; min-width: 2.9em; }
 #count.full { color: var(--accent); }
 #count.bump { animation: bump .25s; }
 @keyframes bump { 30% { transform: translateX(-4px); } 60% { transform: translateX(4px); } }
@@ -150,16 +153,16 @@ body { position: fixed; inset: 0; width: 100%; }
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
   overflow-x: auto;
   scrollbar-width: none;
 }
 #picked::-webkit-scrollbar { display: none; }
 .chip {
   flex: none;
-  min-width: 22px;
+  min-width: 20px;
   height: 18px;
-  padding: 0 5px;
+  padding: 0 4px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -171,11 +174,11 @@ body { position: fixed; inset: 0; width: 100%; }
   font-variant-numeric: tabular-nums;
 }
 
-#clear-btn, #latest-btn, #zoom-out, #zoom-in, #color-btn {
+#clear-btn, #latest-btn, #zoom-out, #zoom-in, #color-btn, #csv-btn {
   position: relative;
   flex: none;
   height: 30px;      /* ボタン自体を十分な高さにする(::afterでの拡張はしない) */
-  padding: 0 10px;
+  padding: 0 8px;
   font: inherit;
   font-weight: 700;
   color: var(--ink);
@@ -185,16 +188,16 @@ body { position: fixed; inset: 0; width: 100%; }
   touch-action: manipulation;   /* 連打でSafariのダブルタップ拡大が起きないように */
 }
 #zoom-out, #zoom-in { min-width: 40px; padding: 0; font-size: 18px; line-height: 1; }
-#latest-btn { margin-left: 8px; }
-#zoom-val { flex: none; min-width: 3.2em; text-align: center; font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums; }
-#clear-btn:active:not(:disabled), #latest-btn:active, #zoom-out:active:not(:disabled), #zoom-in:active:not(:disabled), #color-btn:active { background: var(--line); }
+#latest-btn { margin-left: 4px; }
+#zoom-val { flex: none; min-width: 2.9em; text-align: center; font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums; }
+#clear-btn:active:not(:disabled), #latest-btn:active, #zoom-out:active:not(:disabled), #zoom-in:active:not(:disabled), #color-btn:active, #csv-btn:active { background: var(--line); }
 #color-btn[aria-expanded="true"] { background: var(--ink); color: #fff; }
 #clear-btn:disabled, #zoom-out:disabled, #zoom-in:disabled { opacity: .35; }
 @media (prefers-reduced-motion: reduce) { #count.bump { animation: none; } }
 @media (max-width: 700px) { #count-label { display: none; } }   /* 狭い画面では1行に収めるため「選択数」の文字を省く */
 
 /* ---- 色設定パネル(重ねて表示) ---- */
-#color-panel {
+#color-panel, #csv-msg {
   position: absolute;
   z-index: 30;
   top: var(--stat-h);
@@ -211,7 +214,7 @@ body { position: fixed; inset: 0; width: 100%; }
   font-size: 13px;
   touch-action: manipulation;
 }
-#color-panel[hidden] { display: none; }
+#color-panel[hidden], #csv-msg[hidden] { display: none; }
 .cp-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
 .cp-title { font-weight: 800; font-size: 14px; }
 .cp-row { display: flex; align-items: center; gap: 8px; padding: 4px 0; border-top: 1px solid var(--line); }
@@ -234,9 +237,17 @@ body { position: fixed; inset: 0; width: 100%; }
 .cp-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; }
 #cp-warn { color: var(--main); font-weight: 700; font-size: 12px; }
 #cp-warn[hidden] { display: none; }
-#cp-close, #cp-reset {
+#cp-close, #cp-reset, #csv-msg-close {
   height: 30px; padding: 0 12px; font: inherit; font-weight: 700; color: var(--ink);
   background: var(--paper-alt); border: 1px solid var(--ink); border-radius: 6px; touch-action: manipulation;
 }
 #cp-reset { margin-left: auto; }
-#cp-close:active, #cp-reset:active { background: var(--line); }
+#cp-close:active, #cp-reset:active, #csv-msg-close:active { background: var(--line); }
+
+/* ---- CSV読み込み ---- */
+.file-hidden { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+#csv-info { flex: none; font-size: 11px; font-weight: 700; color: var(--ink); max-width: 7em; overflow: hidden; text-overflow: ellipsis; }
+#csv-msg-body { font-size: 13px; line-height: 1.5; white-space: normal; user-select: text; -webkit-user-select: text; }
+#csv-msg-body ul { margin: 4px 0 0; padding-left: 1.2em; }
+#csv-msg.err { border-color: var(--main); border-width: 2px; }
+#csv-msg.err .cp-title { color: var(--main); }

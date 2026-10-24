@@ -17,6 +17,9 @@
     <button id="zoom-in" type="button" aria-label="拡大">＋</button>
     <button id="latest-btn" type="button">最新回へ戻る</button>
     <button id="color-btn" type="button" aria-expanded="false" aria-controls="color-panel">色設定</button>
+    <button id="csv-btn" type="button">CSV読み込み</button>
+    <span id="csv-info" aria-live="polite">サンプル</span>
+    <input id="csv-input" class="file-hidden" type="file" accept=".csv,text/csv,text/comma-separated-values,.txt" aria-label="CSVファイルを選択">
     <span id="count-label">選択数</span>
     <span id="count" aria-live="polite">0 / 7</span>
     <span id="picked" aria-label="選択した数字"></span>
@@ -44,6 +47,14 @@
       <span id="cp-warn" hidden>※本数字とボーナスが同じ色です</span>
       <button id="cp-reset" type="button">初期設定に戻す</button>
     </div>
+  </div>
+  <!-- CSV読み込みの結果・エラー表示(重ねて表示。レイアウトには影響しない) -->
+  <div id="csv-msg" role="status" hidden>
+    <div class="cp-head">
+      <span class="cp-title" id="csv-msg-title"></span>
+      <button id="csv-msg-close" type="button">閉じる</button>
+    </div>
+    <div id="csv-msg-body"></div>
   </div>
   <!-- A. 数字の見出し領域 -->
   <div id="head-scroll" class="hscroll"><div id="head-row" class="row head"></div></div>
