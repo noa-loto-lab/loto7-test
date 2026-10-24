@@ -49,6 +49,7 @@
   buildRow(headRow, '開催回', function (c) { return el(colClass(c), c); });
 
   var tableRows = document.getElementById('table-rows');
+  var tableScroll = document.getElementById('table-scroll');
   // 履歴表を作り直す(古い回が先頭=上、新しい回が最後=下)。サンプルもCSVも同じ処理を使う
   function renderHistory(list) {
     tableRows.textContent = '';
