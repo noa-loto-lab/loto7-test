@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="format-detection" content="telephone=no">
+<title>ロト7予想ツール</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <!-- 操作行(最上段・1行・縮尺の対象外・横スクロールしない) -->
+  <div id="status-bar">
+    <button id="zoom-out" type="button" aria-label="縮小">−</button>
+    <span id="zoom-val" aria-live="polite">100%</span>
+    <button id="zoom-in" type="button" aria-label="拡大">＋</button>
+    <button id="latest-btn" type="button">最新回へ戻る</button>
+    <button id="color-btn" type="button" aria-expanded="false" aria-controls="color-panel">色設定</button>
+    <span id="count-label">選択数</span>
+    <span id="count" aria-live="polite">0 / 7</span>
+    <span id="picked" aria-label="選択した数字"></span>
+    <button id="clear-btn" type="button" disabled>全解除</button>
+  </div>
+  <!-- 色設定パネル(操作行の下に重ねて表示。レイアウトには影響しない) -->
+  <div id="color-panel" role="dialog" aria-label="色設定" hidden>
+    <div class="cp-head">
+      <span class="cp-title">色設定</span>
+      <button id="cp-close" type="button">閉じる</button>
+    </div>
+    <div class="cp-row" data-kind="main">
+      <span class="cp-sample" aria-hidden="true">12</span>
+      <span class="cp-name">本数字</span>
+      <span class="cp-swatches"></span>
+      <label class="cp-free">自由<input type="color" aria-label="本数字の色を自由に選ぶ"></label>
+    </div>
+    <div class="cp-row" data-kind="bonus">
+      <span class="cp-sample" aria-hidden="true">12</span>
+      <span class="cp-name">ボーナス</span>
+      <span class="cp-swatches"></span>
+      <label class="cp-free">自由<input type="color" aria-label="ボーナス数字の色を自由に選ぶ"></label>
+    </div>
+    <div class="cp-foot">
+      <span id="cp-warn" hidden>※本数字とボーナスが同じ色です</span>
+      <button id="cp-reset" type="button">初期設定に戻す</button>
+    </div>
+  </div>
+  <!-- A. 数字の見出し領域 -->
+  <div id="head-scroll" class="hscroll"><div id="head-row" class="row head"></div></div>
+  <!-- B. 過去の出目表領域(縦スクロール+横スクロールの親) -->
+  <div id="table-scroll" class="vscroll"><div id="table-rows"></div></div>
+  <!-- C. 次回予想欄(下部固定) -->
+  <div id="pred-scroll" class="hscroll"><div id="pred-row" class="row pred"></div></div>
+</div>
+<script src="app.js"></script>
+</body>
+</html>
