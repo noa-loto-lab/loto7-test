@@ -43,7 +43,7 @@
     row.appendChild(el('round', label));
     for (var c = 1; c <= COLS; c++) row.appendChild(cellFn(c));
   }
-  function colClass(c) { return 'cell' + (c % 5 === 0 ? ' k5' : ''); }
+  function colClass(c) { return 'cell' + ([9, 19, 29].indexOf(c) !== -1 ? ' k5' : ''); }
 
   var headRow = document.getElementById('head-row');
   buildRow(headRow, '開催回', function (c) { return el(colClass(c), c); });
@@ -160,11 +160,18 @@
   var horizontalToggle = document.getElementById('horizontal-toggle');
   var horizontalOnly = false;
   horizontalToggle.addEventListener('click', function () {
+    // 切替前の位置を記録。縦スクロール設定自体は変更しないため、表示中の回を維持する。
+    var savedTop = tableScroll.scrollTop;
+    var savedLeft = tableScroll.scrollLeft;
     horizontalOnly = !horizontalOnly;
     tableScroll.classList.toggle('horizontal-only', horizontalOnly);
     horizontalToggle.textContent = horizontalOnly ? '横のみ ON' : '横のみ OFF';
     horizontalToggle.setAttribute('aria-pressed', horizontalOnly ? 'true' : 'false');
-    // OFFへ戻した場合も、既存のスクロール位置を維持する
+    requestAnimationFrame(function () {
+      tableScroll.scrollTop = savedTop;
+      tableScroll.scrollLeft = savedLeft;
+      scrollers[0].scrollLeft = scrollers[2].scrollLeft = savedLeft;
+    });
   });
 
   // ---- 拡大・縮小(操作行は対象外) ----

@@ -86,7 +86,7 @@ body { position: fixed; inset: 0; width: 100%; }
   border-right: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
 }
-.cell.k5 { background: var(--paper-alt); }   /* 5の倍数の列を薄く色分け */
+.cell.k5 { background: #dcd9cf; }   /* 10・20・30の左隣(9・19・29)を少し濃いグレーに */
 
 .round {
   position: sticky;
@@ -113,14 +113,14 @@ body { position: fixed; inset: 0; width: 100%; }
 /* C. 予想欄 */
 .row.pred { height: var(--pred-h); }
 .pred .round, .pred .cell { border-top: 3px solid var(--accent); border-bottom: 0; background: var(--paper); }
-.pred .cell.k5 { background: var(--paper-alt); }
+.pred .cell.k5 { background: #dcd9cf; }
 .pred .round { color: var(--accent); }
 
 /* ---- 第2段階:数字選択 ---- */
 .pred .cell[data-n] { cursor: pointer; touch-action: pan-x; }
 .pred .cell.sel {
-  background: var(--sel);
-  color: var(--sel-ink);
+  background: var(--main);
+  color: var(--main-ink);
   font-size: var(--fs-sel);
   font-weight: 800;
   font-variant-numeric: tabular-nums;
@@ -166,8 +166,8 @@ body { position: fixed; inset: 0; width: 100%; }
   align-items: center;
   justify-content: center;
   border-radius: 4px;
-  background: var(--sel);
-  color: var(--sel-ink);
+  background: var(--main);
+  color: var(--main-ink);
   font-size: 12px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
@@ -194,8 +194,9 @@ body { position: fixed; inset: 0; width: 100%; }
 #clear-btn:disabled, #zoom-out:disabled, #zoom-in:disabled { opacity: .35; }
 #horizontal-toggle[aria-pressed="true"] { background: var(--ink); color: #fff; }
 #horizontal-toggle:active { background: var(--line); }
-/* ONでは過去の出目表を横方向だけ操作可能にする */
-#table-scroll.horizontal-only { overflow-x: auto; overflow-y: hidden; touch-action: pan-x; }
+/* ONでは縦スクロール領域やscrollTopを変更せず、タッチ操作だけ横方向に限定する。
+   overflow-y:hidden はiOS Safariで表示位置が跳ぶ原因になるため使わない。 */
+#table-scroll.horizontal-only { touch-action: pan-x; }
 @media (prefers-reduced-motion: reduce) { #count.bump { animation: none; } }
 @media (max-width: 700px) { #count-label { display: none; } }   /* 狭い画面では1行に収めるため「選択数」の文字を省く */
 
