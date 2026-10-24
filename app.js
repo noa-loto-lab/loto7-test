@@ -91,6 +91,42 @@
     }, { passive: true });
   });
 
+  // ---- タッチスクロールの方向固定 ----
+  // iPhoneで斜めに流れるのを防ぐ。最初の移動方向を判定し、その指の操作中は一軸だけ動かす。
+  (function installAxisLockedScroll() {
+    var startX = 0, startY = 0, lastX = 0, lastY = 0, axis = null, tracking = false;
+    tableScroll.addEventListener('touchstart', function (e) {
+      if (!e.touches || e.touches.length !== 1) { tracking = false; return; }
+      var t = e.touches[0];
+      startX = lastX = t.clientX;
+      startY = lastY = t.clientY;
+      axis = null;
+      tracking = true;
+    }, { passive: true });
+    tableScroll.addEventListener('touchmove', function (e) {
+      if (!tracking || !e.touches || e.touches.length !== 1) return;
+      var t = e.touches[0], dx = t.clientX - startX, dy = t.clientY - startY;
+      if (!axis && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
+        axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+        // 判定後はブラウザ標準の二軸スクロールを止め、選んだ軸だけ手動で動かす。
+      }
+      if (!axis) return;
+      if (e.cancelable) e.preventDefault();
+      if (axis === 'x') {
+        var moveX = lastX - t.clientX;
+        tableScroll.scrollLeft += moveX;
+        scrollers[0].scrollLeft = scrollers[2].scrollLeft = tableScroll.scrollLeft;
+      } else {
+        tableScroll.scrollTop += lastY - t.clientY;
+      }
+      lastX = t.clientX;
+      lastY = t.clientY;
+    }, { passive: false });
+    function stop() { tracking = false; axis = null; }
+    tableScroll.addEventListener('touchend', stop, { passive: true });
+    tableScroll.addEventListener('touchcancel', stop, { passive: true });
+  })();
+
   // ---- 数字選択(第2段階) ----
   var MAX_SELECT = 7;
   var selected = {};          // { 数字: true }
@@ -156,24 +192,6 @@
       if (tableScroll.scrollLeft !== left) tableScroll.scrollLeft = left;
     });
   });
-  // ---- 横スクロールのみ切り替え(初期OFF) ----
-  var horizontalToggle = document.getElementById('horizontal-toggle');
-  var horizontalOnly = false;
-  horizontalToggle.addEventListener('click', function () {
-    // 切替前の位置を記録。縦スクロール設定自体は変更しないため、表示中の回を維持する。
-    var savedTop = tableScroll.scrollTop;
-    var savedLeft = tableScroll.scrollLeft;
-    horizontalOnly = !horizontalOnly;
-    tableScroll.classList.toggle('horizontal-only', horizontalOnly);
-    horizontalToggle.textContent = horizontalOnly ? '横のみ ON' : '横のみ OFF';
-    horizontalToggle.setAttribute('aria-pressed', horizontalOnly ? 'true' : 'false');
-    requestAnimationFrame(function () {
-      tableScroll.scrollTop = savedTop;
-      tableScroll.scrollLeft = savedLeft;
-      scrollers[0].scrollLeft = scrollers[2].scrollLeft = savedLeft;
-    });
-  });
-
   // ---- 拡大・縮小(操作行は対象外) ----
   // transformは使わず、CSS変数 --z で列幅・行高・文字サイズを実寸で変える。
   var ZOOMS = [40, 50, 60, 70, 80, 90, 100, 120, 140];   // %

@@ -10,7 +10,7 @@
   --cols: 37;
   --head-h: calc(30px * var(--z));
   --row-h: calc(34px * var(--z));
-  --pred-h: calc(48px * var(--z));
+  --pred-h: calc(62px * var(--z));
   --stat-h: 40px;                     /* 操作行(縮尺の対象外)。上端から離してタップしやすくする */
 
   --fs-round: max(6px, calc(13px * var(--z)));
@@ -111,13 +111,14 @@ body { position: fixed; inset: 0; width: 100%; }
 .cell.bonus { background: var(--bonus); color: var(--bonus-ink); }   /* ボーナス数字 */
 
 /* C. 予想欄 */
-.row.pred { height: var(--pred-h); }
+.row.pred { height: calc(48px * var(--z)); }
+#pred-scroll { display: flex; align-items: flex-start; padding-top: 7px; padding-bottom: max(7px, env(safe-area-inset-bottom, 0px)); }
 .pred .round, .pred .cell { border-top: 3px solid var(--accent); border-bottom: 0; background: var(--paper); }
 .pred .cell.k5 { background: #dcd9cf; }
 .pred .round { color: var(--accent); }
 
 /* ---- 第2段階:数字選択 ---- */
-.pred .cell[data-n] { cursor: pointer; touch-action: pan-x; }
+.pred .cell[data-n] { cursor: pointer; touch-action: manipulation; }
 .pred .cell.sel {
   background: var(--main);
   color: var(--main-ink);
@@ -173,7 +174,7 @@ body { position: fixed; inset: 0; width: 100%; }
   font-variant-numeric: tabular-nums;
 }
 
-#clear-btn, #latest-btn, #zoom-out, #zoom-in, #color-btn, #csv-btn, #horizontal-toggle {
+#clear-btn, #latest-btn, #zoom-out, #zoom-in, #color-btn, #csv-btn {
   position: relative;
   flex: none;
   height: 30px;      /* ボタン自体を十分な高さにする(::afterでの拡張はしない) */
@@ -192,11 +193,6 @@ body { position: fixed; inset: 0; width: 100%; }
 #clear-btn:active:not(:disabled), #latest-btn:active, #zoom-out:active:not(:disabled), #zoom-in:active:not(:disabled), #color-btn:active, #csv-btn:active { background: var(--line); }
 #color-btn[aria-expanded="true"] { background: var(--ink); color: #fff; }
 #clear-btn:disabled, #zoom-out:disabled, #zoom-in:disabled { opacity: .35; }
-#horizontal-toggle[aria-pressed="true"] { background: var(--ink); color: #fff; }
-#horizontal-toggle:active { background: var(--line); }
-/* ONでは縦スクロール領域やscrollTopを変更せず、タッチ操作だけ横方向に限定する。
-   overflow-y:hidden はiOS Safariで表示位置が跳ぶ原因になるため使わない。 */
-#table-scroll.horizontal-only { touch-action: pan-x; }
 @media (prefers-reduced-motion: reduce) { #count.bump { animation: none; } }
 @media (max-width: 700px) { #count-label { display: none; } }   /* 狭い画面では1行に収めるため「選択数」の文字を省く */
 
