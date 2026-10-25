@@ -172,7 +172,7 @@
   // ---- 拡大・縮小(操作行は対象外) ----
   // transformは使わず、CSS変数 --z で列幅・行高・文字サイズを実寸で変える。
   var ZOOMS = [30, 40, 50, 60, 70, 80, 90, 100, 120, 140];   // %
-  var zi = 0;                                           // 初期 40%
+  var zi = 1;                                           // 初期 40%
   var zoomOut = document.getElementById('zoom-out');
   var zoomIn = document.getElementById('zoom-in');
   var zoomVal = document.getElementById('zoom-val');
