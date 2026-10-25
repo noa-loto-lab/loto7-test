@@ -142,23 +142,6 @@ body { position: fixed; inset: 0; width: 100%; }
   white-space: nowrap;
 }
 #status-bar::-webkit-scrollbar { display: none; }
-/* 右端の控えめな表示で、操作行を横にスワイプできることを示す */
-#status-bar::after {
-  content: "↔";
-  position: sticky;
-  right: 0;
-  flex: 0 0 28px;
-  align-self: stretch;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-left: -2px;
-  color: var(--ink);
-  font-size: 17px;
-  font-weight: 800;
-  background: linear-gradient(90deg, rgba(246,245,240,0), var(--paper) 35%);
-  pointer-events: none;
-}
 #count-label { flex: none; }
 #count { flex: none; font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; min-width: 2.9em; }
 #count.full { color: var(--accent); }
@@ -205,7 +188,7 @@ body { position: fixed; inset: 0; width: 100%; }
   touch-action: manipulation;   /* 連打でSafariのダブルタップ拡大が起きないように */
 }
 #zoom-out, #zoom-in { min-width: 40px; padding: 0; font-size: 18px; line-height: 1; }
-#latest-btn { min-width: 40px; padding: 0; font-size: 20px; line-height: 1; }
+#latest-btn { margin-left: 4px; }
 #zoom-val { flex: none; min-width: 2.9em; text-align: center; font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums; }
 #clear-btn:active:not(:disabled), #latest-btn:active, #zoom-out:active:not(:disabled), #zoom-in:active:not(:disabled), #color-btn:active, #csv-btn:active { background: var(--line); }
 #color-btn[aria-expanded="true"] { background: var(--ink); color: #fff; }
@@ -268,3 +251,36 @@ body { position: fixed; inset: 0; width: 100%; }
 #csv-msg-body ul { margin: 4px 0 0; padding-left: 1.2em; }
 #csv-msg.err { border-color: var(--main); border-width: 2px; }
 #csv-msg.err .cp-title { color: var(--main); }
+
+/* v3.4: stronger separators between decade bands, without shading numbers */
+.row .cell[data-n="10"], .row .cell[data-n="20"], .row .cell[data-n="30"] {
+  border-right: 2px solid #8f8b80;
+}
+.latest-icon {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  line-height: 1;
+}
+.latest-arrow {
+  font-size: 25px;
+  font-weight: 500;
+  line-height: 0.9;
+}
+.latest-line {
+  width: 20px;
+  height: 3px;
+  margin-top: 2px;
+  border-radius: 2px;
+  background: currentColor;
+}
+#latest-btn {
+  min-width: 40px;
+  width: 40px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}

@@ -15,15 +15,15 @@
     <button id="zoom-out" type="button" aria-label="縮小">−</button>
     <span id="zoom-val" aria-live="polite">40%</span>
     <button id="zoom-in" type="button" aria-label="拡大">＋</button>
-    <button id="latest-btn" type="button" aria-label="最新回へ戻る" title="最新回へ戻る">⇩</button>
+    <button id="latest-btn" type="button" aria-label="最新回へ戻る" title="最新回へ戻る">↓</button>
     <span id="csv-info" aria-live="polite">サンプル</span>
     <span id="count-label">選択数</span>
     <span id="count" aria-live="polite">0 / 7</span>
     <span id="picked" aria-label="選択した数字"></span>
-    <button id="clear-btn" type="button" disabled>クリア</button>
-    <button id="csv-btn" type="button">CSV読込</button>
     <button id="color-btn" type="button" aria-expanded="false" aria-controls="color-panel">色設定</button>
+    <button id="csv-btn" type="button">CSV読み込み</button>
     <input id="csv-input" class="file-hidden" type="file" accept=".csv,text/csv,text/comma-separated-values,.txt" aria-label="CSVファイルを選択">
+    <button id="clear-btn" type="button" disabled>全解除</button>
   </div>
   <!-- 色設定パネル(操作行の下に重ねて表示。レイアウトには影響しない) -->
   <div id="color-panel" role="dialog" aria-label="色設定" hidden>
