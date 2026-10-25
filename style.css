@@ -11,7 +11,8 @@
   --head-h: calc(30px * var(--z));
   --row-h: calc(44px * var(--z));
   --pred-h: calc(62px * var(--z));
-  --stat-h: 40px;\n  --pick-h: 38px;                     /* 操作行(縮尺の対象外)。上端から離してタップしやすくする */
+  --stat-h: 40px;
+  --pick-h: 38px;                     /* 操作行(縮尺の対象外)。上端から離してタップしやすくする */
 
   --fs-round: max(6px, calc(13px * var(--z)));
   --fs-head: max(6px, calc(14px * var(--z)));
@@ -68,7 +69,8 @@ body { position: fixed; inset: 0; width: 100%; }
 }
 .hscroll::-webkit-scrollbar, .vscroll::-webkit-scrollbar { display: none; }
 .hscroll { overflow-x: auto; overflow-y: hidden; }
-.vscroll { overflow: auto; }   /* 縦は独立、横は上下の基準になる */
+.vscroll { overflow-x: hidden; overflow-y: auto; }   /* v3.9-test: 縦専用(横は内側の #table-h が担当) */
+#table-h { overscroll-behavior-x: contain; overscroll-behavior-y: auto; }   /* v3.9-test: 縦の操作は外側へ素直に渡す */
 
 /* 行・マス共通 */
 .row {

@@ -76,7 +76,7 @@
   // ---- 横スクロールの同期(見出し・出目表・予想欄) ----
   var scrollers = [
     document.getElementById('head-scroll'),
-    document.getElementById('table-scroll'),
+    document.getElementById('table-h'),          // v3.9-test: 出目表の横スクロール担当(旧: table-scroll)
     document.getElementById('pred-scroll')
   ];
   var owner = null, timer = null;
@@ -153,20 +153,21 @@
   render();
 
   // ---- 初期位置:新しい回(下側)を表示 ----
-  var tableScroll = scrollers[1];
+  var tableScroll = document.getElementById('table-scroll');   // v3.9-test: 縦スクロール担当
+  var tableH = scrollers[1];                                    // v3.9-test: 横スクロール担当(#table-h)
   function toBottom() { tableScroll.scrollTop = tableScroll.scrollHeight; }
 
   // 「最新回へ戻る」:縦位置だけ最下段へ。横位置(scrollLeft)には触れない
   // iOS Safariでは scrollTo({behavior:'smooth'}) が効かない/慣性スクロール中は
   // scrollTop の代入が無視されることがあるため、慣性を止めてから scrollTop を直接代入する。
   document.getElementById('latest-btn').addEventListener('click', function () {
-    var left = tableScroll.scrollLeft;
+    var left = tableH.scrollLeft;
     tableScroll.style.overflowY = 'hidden';          // 慣性スクロールを止める
     tableScroll.scrollTop = tableScroll.scrollHeight;
     requestAnimationFrame(function () {
       tableScroll.style.overflowY = '';
       tableScroll.scrollTop = tableScroll.scrollHeight;
-      if (tableScroll.scrollLeft !== left) tableScroll.scrollLeft = left;
+      if (tableH.scrollLeft !== left) tableH.scrollLeft = left;
     });
   });
   // ---- 拡大・縮小(操作行は対象外) ----
@@ -180,17 +181,17 @@
   function setZoom(next) {
     if (next < 0 || next >= ZOOMS.length || next === zi) return;
     var ratio = ZOOMS[next] / ZOOMS[zi];
-    var t = tableScroll;
+    var t = tableScroll, h = tableH;   // v3.9-test: 縦はt、横はhから読む
     // 変更前の「表示の中心」と「最新回を見ているか」を記録
     var atBottom = t.scrollTop >= t.scrollHeight - t.clientHeight - 2;
-    var cx = t.scrollLeft + t.clientWidth / 2;
+    var cx = h.scrollLeft + h.clientWidth / 2;
     var cy = t.scrollTop + t.clientHeight / 2;
     zi = next;
     document.documentElement.style.setProperty('--z', ZOOMS[zi] / 100);
     // 以降の読み取りでレイアウトが再計算される。同じ場所が中心に残るようにスクロール位置を補正
-    t.scrollLeft = cx * ratio - t.clientWidth / 2;
+    h.scrollLeft = cx * ratio - h.clientWidth / 2;
     t.scrollTop = atBottom ? t.scrollHeight : cy * ratio - t.clientHeight / 2;
-    scrollers[0].scrollLeft = scrollers[2].scrollLeft = t.scrollLeft;   // 上下の列位置を確実に揃える
+    scrollers[0].scrollLeft = scrollers[2].scrollLeft = h.scrollLeft;   // 上下の列位置を確実に揃える
     zoomVal.textContent = ZOOMS[zi] + '%';
     zoomOut.disabled = zi === 0;
     zoomIn.disabled = zi === ZOOMS.length - 1;

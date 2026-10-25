@@ -73,8 +73,8 @@
   </div>
   <!-- A. 数字の見出し領域 -->
   <div id="head-scroll" class="hscroll"><div id="head-row" class="row head"></div></div>
-  <!-- B. 過去の出目表領域(縦スクロール+横スクロールの親) -->
-  <div id="table-scroll" class="vscroll"><div id="table-rows"></div></div>
+  <!-- B. 過去の出目表領域 v3.9-test: 縦スクロール(外側)と横スクロール(内側 #table-h)を別の要素に分離 -->
+  <div id="table-scroll" class="vscroll"><div id="table-h" class="hscroll"><div id="table-rows"></div></div></div>
   <!-- C. 次回予想欄(下部固定) -->
   <div id="pred-scroll" class="hscroll"><div id="pred-row" class="row pred"></div></div>
 </div>
