@@ -9,7 +9,7 @@
   --cell-w: calc(44px * var(--z));    /* 数字マスの列 */
   --cols: 37;
   --head-h: calc(30px * var(--z));
-  --row-h: calc(34px * var(--z));
+  --row-h: calc(44px * var(--z));
   --pred-h: calc(62px * var(--z));
   --stat-h: 40px;                     /* 操作行(縮尺の対象外)。上端から離してタップしやすくする */
 
@@ -86,7 +86,7 @@ body { position: fixed; inset: 0; width: 100%; }
   border-right: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
 }
-.cell.k5 { background: #dcd9cf; }   /* 10・20・30の左隣(9・19・29)を少し濃いグレーに */
+.cell.k5 { background: transparent; border-right: 2px solid #8f8b80; } /* 9/19/29の右境界＝10/20/30の区切り */
 
 .round {
   position: sticky;
@@ -114,7 +114,7 @@ body { position: fixed; inset: 0; width: 100%; }
 .row.pred { height: calc(48px * var(--z)); }
 #pred-scroll { display: flex; align-items: flex-start; padding-top: 7px; padding-bottom: max(7px, env(safe-area-inset-bottom, 0px)); }
 .pred .round, .pred .cell { border-top: 3px solid var(--accent); border-bottom: 0; background: var(--paper); }
-.pred .cell.k5 { background: #dcd9cf; }
+.pred .cell.k5 { background: transparent; border-right: 2px solid #8f8b80; }
 .pred .round { color: var(--accent); }
 
 /* ---- 第2段階:数字選択 ---- */
@@ -252,10 +252,7 @@ body { position: fixed; inset: 0; width: 100%; }
 #csv-msg.err { border-color: var(--main); border-width: 2px; }
 #csv-msg.err .cp-title { color: var(--main); }
 
-/* v3.4: stronger separators between decade bands, without shading numbers */
-.row .cell[data-n="10"], .row .cell[data-n="20"], .row .cell[data-n="30"] {
-  border-right: 2px solid #8f8b80;
-}
+/* decade separators are applied to .cell.k5 (9, 19, 29) in every row */
 .latest-icon {
   display: flex;
   flex-direction: column;
