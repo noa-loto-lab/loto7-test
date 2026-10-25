@@ -10,20 +10,35 @@
 </head>
 <body>
 <div id="app">
-  <!-- 操作行(最上段・1行・縮尺の対象外・横スクロールしない) -->
+  <!-- 操作行：縮尺・最新回・色設定・CSV -->
   <div id="status-bar">
     <button id="zoom-out" type="button" aria-label="縮小">−</button>
     <span id="zoom-val" aria-live="polite">40%</span>
     <button id="zoom-in" type="button" aria-label="拡大">＋</button>
-    <button id="latest-btn" type="button" aria-label="最新回へ戻る" title="最新回へ戻る">↓</button>
+    <button id="latest-btn" type="button" aria-label="最新回へ戻る" title="最新回へ戻る">
+      <span class="latest-icon" aria-hidden="true"><span class="latest-arrow">↓</span><span class="latest-line"></span></span>
+    </button>
     <span id="csv-info" aria-live="polite">サンプル</span>
-    <span id="count-label">選択数</span>
-    <span id="count" aria-live="polite">0 / 7</span>
-    <span id="picked" aria-label="選択した数字"></span>
     <button id="color-btn" type="button" aria-expanded="false" aria-controls="color-panel">色設定</button>
-    <button id="csv-btn" type="button">CSV読み込み</button>
+    <button id="csv-btn" type="button">CSV読込</button>
+    <span id="toolbar-hint" aria-hidden="true">↔</span>
     <input id="csv-input" class="file-hidden" type="file" accept=".csv,text/csv,text/comma-separated-values,.txt" aria-label="CSVファイルを選択">
-    <button id="clear-btn" type="button" disabled>全解除</button>
+  </div>
+  <!-- 選択数字行：固定サイズの7枠＋クリア -->
+  <div id="selection-bar">
+    <span id="count-label">選択</span>
+    <span id="count" aria-live="polite">0 / 7</span>
+    <div id="picked" aria-label="選択した数字">
+      <span class="chip-slot" data-slot="0"></span>
+      <span class="chip-slot" data-slot="1"></span>
+      <span class="chip-slot" data-slot="2"></span>
+      <span class="chip-slot" data-slot="3"></span>
+      <span class="chip-slot" data-slot="4"></span>
+      <span class="chip-slot" data-slot="5"></span>
+      <span class="chip-slot" data-slot="6"></span>
+    </div>
+    <button id="clear-btn" type="button" disabled>クリア</button>
+    <span id="selection-msg" role="status" aria-live="polite"></span>
   </div>
   <!-- 色設定パネル(操作行の下に重ねて表示。レイアウトには影響しない) -->
   <div id="color-panel" role="dialog" aria-label="色設定" hidden>

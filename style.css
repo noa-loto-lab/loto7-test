@@ -11,7 +11,7 @@
   --head-h: calc(30px * var(--z));
   --row-h: calc(44px * var(--z));
   --pred-h: calc(62px * var(--z));
-  --stat-h: 40px;                     /* 操作行(縮尺の対象外)。上端から離してタップしやすくする */
+  --stat-h: 40px;\n  --pick-h: 38px;                     /* 操作行(縮尺の対象外)。上端から離してタップしやすくする */
 
   --fs-round: max(6px, calc(13px * var(--z)));
   --fs-head: max(6px, calc(14px * var(--z)));
@@ -24,10 +24,10 @@
   --ink: #23262b;
   --line: #cfccc0;
   --main: #d3202c;    /* 本数字:赤(色設定で変更される) */
-  --bonus: #1f5fd1;   /* ボーナス数字:青(色設定で変更される) */
+  --bonus: #f5b700;   /* ボーナス数字:黄色(色設定で変更される) */
   --main-ink: #ffffff;   /* 数字の文字色(背景色に合わせてJSが白/黒を選ぶ) */
-  --bonus-ink: #ffffff;
-  --sel: #f5b700;     /* 選択中:黄(赤・青と混同しない) */
+  --bonus-ink: #1b1b1b;
+  --sel: #d3202c;     /* 選択中は本数字と同じ色 */
   --sel-ink: #1b1b1b;
   --accent: #b5502d;
 }
@@ -53,7 +53,7 @@ body { position: fixed; inset: 0; width: 100%; }
   position: absolute;
   inset: 0;
   display: grid;
-  grid-template-rows: var(--stat-h) var(--head-h) minmax(0, 1fr) var(--pred-h);
+  grid-template-rows: var(--stat-h) var(--pick-h) var(--head-h) minmax(0, 1fr) var(--pred-h);
   /* 横向き時のノッチ・ホームバー対策 */
   padding: 0 env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
 }
@@ -132,52 +132,111 @@ body { position: fixed; inset: 0; width: 100%; }
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 7px 8px 3px;   /* 上端から離す(画面の最上端付近はタップが効きにくい) */
-  overflow-x: auto;       /* 縦向きなど狭い画面では操作行だけ横にスクロールして全ボタンに届くようにする */
+  padding: 5px 8px 3px;
+  overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: none;
   background: var(--paper);
   border-bottom: 1px solid var(--line);
   font-size: 12px;
   white-space: nowrap;
+  position: relative;
 }
 #status-bar::-webkit-scrollbar { display: none; }
-#count-label { flex: none; }
-#count { flex: none; font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; min-width: 2.9em; }
+#toolbar-hint {
+  position: sticky;
+  right: 0;
+  flex: 0 0 22px;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: -3px;
+  color: var(--ink);
+  font-size: 17px;
+  font-weight: 800;
+  background: linear-gradient(90deg, rgba(246,245,240,0), var(--paper) 35%);
+  pointer-events: none;
+}
+#status-bar #latest-btn {
+  width: 40px;
+  min-width: 40px;
+  height: 30px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.latest-icon { display:flex; flex-direction:column; align-items:center; justify-content:center; width:100%; line-height:1; }
+.latest-arrow { font-size:24px; font-weight:500; line-height:.9; }
+.latest-line { width:20px; height:3px; margin-top:2px; border-radius:2px; background:currentColor; }
+
+#selection-bar {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  padding: 3px 8px;
+  overflow: hidden;
+  background: var(--paper);
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+#count-label { flex: none; font-size: 11px; }
+#count {
+  flex: none;
+  min-width: 3.1em;
+  font-size: 13px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
 #count.full { color: var(--accent); }
 #count.bump { animation: bump .25s; }
 @keyframes bump { 30% { transform: translateX(-4px); } 60% { transform: translateX(4px); } }
 
-/* 選択した数字:7個すべてを同時表示。内部スクロールは使わない */
 #picked {
-  flex: 0 0 190px;
-  width: 190px;
-  min-width: 190px;
+  flex: 0 1 auto;
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 3px;
   overflow: hidden;
 }
-.chip {
-  flex: 1 1 0;
-  min-width: 0;
-  height: 18px;
-  padding: 0 2px;
+.chip-slot {
+  flex: 0 0 27px;
+  width: 27px;
+  height: 27px;
   display: flex;
   align-items: center;
   justify-content: center;
+  border: 1px solid var(--line);
   border-radius: 4px;
-  background: var(--main);
+  background: transparent;
   color: var(--main-ink);
   font-size: 12px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
+.chip-slot.filled {
+  background: var(--main);
+  border-color: var(--main);
+  color: var(--main-ink);
+}
+#selection-msg {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 10px;
+  color: var(--accent);
+}
+#selection-msg:empty { display: none; }
 
 #clear-btn, #latest-btn, #zoom-out, #zoom-in, #color-btn, #csv-btn {
   position: relative;
   flex: none;
-  height: 30px;      /* ボタン自体を十分な高さにする(::afterでの拡張はしない) */
+  height: 30px;
   padding: 0 8px;
   font: inherit;
   font-weight: 700;
@@ -185,16 +244,16 @@ body { position: fixed; inset: 0; width: 100%; }
   background: var(--paper-alt);
   border: 1px solid var(--ink);
   border-radius: 6px;
-  touch-action: manipulation;   /* 連打でSafariのダブルタップ拡大が起きないように */
+  touch-action: manipulation;
 }
 #zoom-out, #zoom-in { min-width: 40px; padding: 0; font-size: 18px; line-height: 1; }
-#latest-btn { margin-left: 4px; }
 #zoom-val { flex: none; min-width: 2.9em; text-align: center; font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums; }
+#clear-btn { height: 30px; min-width: 54px; padding: 0 7px; }
 #clear-btn:active:not(:disabled), #latest-btn:active, #zoom-out:active:not(:disabled), #zoom-in:active:not(:disabled), #color-btn:active, #csv-btn:active { background: var(--line); }
 #color-btn[aria-expanded="true"] { background: var(--ink); color: #fff; }
 #clear-btn:disabled, #zoom-out:disabled, #zoom-in:disabled { opacity: .35; }
 @media (prefers-reduced-motion: reduce) { #count.bump { animation: none; } }
-@media (max-width: 700px) { #count-label { display: none; } }   /* 狭い画面では1行に収めるため「選択数」の文字を省く */
+@media (max-width: 700px) { #count-label { display: none; } }
 
 /* ---- 色設定パネル(重ねて表示) ---- */
 #color-panel, #csv-msg {

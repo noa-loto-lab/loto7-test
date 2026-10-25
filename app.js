@@ -107,11 +107,14 @@
     countEl.textContent = n + ' / ' + MAX_SELECT;
     countEl.classList.toggle('full', n === MAX_SELECT);
     clearBtn.disabled = n === 0;
-    pickedEl.textContent = '';
-    Object.keys(selected).map(Number).sort(function (a, b) { return a - b; }).forEach(function (v) {
-      pickedEl.appendChild(el('chip', v));
+    var values = Object.keys(selected).map(Number).sort(function (a, b) { return a - b; });
+    Array.prototype.forEach.call(pickedEl.querySelectorAll('.chip-slot'), function (slot, i) {
+      var v = values[i];
+      slot.textContent = v ? String(v) : '';
+      slot.classList.toggle('filled', !!v);
     });
-    pickedEl.scrollLeft = 0;  // 選択数字の先頭から表示。7個すべてを同時表示する
+    var selectionMsg = document.getElementById('selection-msg');
+    selectionMsg.textContent = '';
     Array.prototype.forEach.call(predRow.querySelectorAll('.cell[data-n]'), function (cell) {
       var on = !!selected[cell.dataset.n];
       cell.classList.toggle('sel', on);
@@ -129,10 +132,15 @@
     } else if (selectedCount() < MAX_SELECT) {
       selected[n] = true;
     } else {
-      // 8個目は追加しない。選択数表示を揺らして知らせる
+      // 8個目は追加せず、画面メッセージを表示。振動API対応端末では短く振動する。
       countEl.classList.remove('bump');
       void countEl.offsetWidth;
       countEl.classList.add('bump');
+      var selectionMsg = document.getElementById('selection-msg');
+      selectionMsg.textContent = '選択できる数字は7個までです';
+      if (typeof navigator.vibrate === 'function') {
+        try { navigator.vibrate(100); } catch (_) {}
+      }
       return;
     }
     render();
@@ -160,7 +168,7 @@
   });
   // ---- 拡大・縮小(操作行は対象外) ----
   // transformは使わず、CSS変数 --z で列幅・行高・文字サイズを実寸で変える。
-  var ZOOMS = [40, 50, 60, 70, 80, 90, 100, 120, 140];   // %
+  var ZOOMS = [30, 40, 50, 60, 70, 80, 90, 100, 120, 140];   // %
   var zi = 0;                                           // 初期 40%
   var zoomOut = document.getElementById('zoom-out');
   var zoomIn = document.getElementById('zoom-in');
@@ -192,8 +200,8 @@
   zoomIn.disabled = zi === ZOOMS.length - 1;
 
   // ---- 色設定(本数字・ボーナス数字の色。localStorageに保存) ----
-  var DEFAULT_COLORS = { main: '#d3202c', bonus: '#1f5fd1' };
-  var PALETTE = ['#d3202c', '#1f5fd1', '#c2410c', '#7e22ce', '#15803d', '#0f766e', '#9d174d', '#374151'];
+  var DEFAULT_COLORS = { main: '#d3202c', bonus: '#f5b700' };
+  var PALETTE = ['#d3202c', '#f5b700', '#1f5fd1', '#c2410c', '#7e22ce', '#15803d', '#0f766e', '#9d174d', '#374151'];
   var STORE_KEY = 'loto7.colors';
   var colors = { main: DEFAULT_COLORS.main, bonus: DEFAULT_COLORS.bonus };
   var HEX = /^#[0-9a-f]{6}$/i;
@@ -204,7 +212,7 @@
       if (!raw) return;                                   // 保存データなし → 初期色
       var o = JSON.parse(raw);
       if (o && HEX.test(o.main)) colors.main = o.main.toLowerCase();
-      if (o && HEX.test(o.bonus)) colors.bonus = o.bonus.toLowerCase();
+      if (o && HEX.test(o.bonus)) colors.bonus = (o.bonus.toLowerCase() === '#1f5fd1' ? DEFAULT_COLORS.bonus : o.bonus.toLowerCase());
     } catch (e) { /* 保存データが壊れている・使えない場合は初期色のまま */ }
   }
   function saveColors() {
