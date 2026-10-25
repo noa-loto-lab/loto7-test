@@ -182,15 +182,8 @@ body { position: fixed; inset: 0; width: 100%; }
   border-bottom: 1px solid var(--line);
   white-space: nowrap;
 }
-#count-label { flex: none; font-size: 11px; }
-#count {
-  flex: none;
-  min-width: 3.1em;
-  font-size: 13px;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-  text-align: center;
-}
+#count-label { display: none; }
+#count { display: none; }
 #count.full { color: var(--accent); }
 #count.bump { animation: bump .25s; }
 @keyframes bump { 30% { transform: translateX(-4px); } 60% { transform: translateX(4px); } }
@@ -231,7 +224,7 @@ body { position: fixed; inset: 0; width: 100%; }
   font-size: 10px;
   color: var(--accent);
 }
-#selection-msg:empty { display: none; }
+#selection-msg { display: none; }
 
 #clear-btn, #latest-btn, #zoom-out, #zoom-in, #color-btn, #csv-btn {
   position: relative;
@@ -339,4 +332,19 @@ body { position: fixed; inset: 0; width: 100%; }
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+/* v3.7: shake only the seven selected slots when an eighth number is rejected */
+#picked.limit-shake .chip-slot {
+  animation: picked-limit-shake .28s ease-in-out;
+}
+@keyframes picked-limit-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-3px); }
+  40% { transform: translateX(3px); }
+  60% { transform: translateX(-2px); }
+  80% { transform: translateX(2px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  #picked.limit-shake .chip-slot { animation: none; }
 }

@@ -115,6 +115,7 @@
     });
     var selectionMsg = document.getElementById('selection-msg');
     selectionMsg.textContent = '';
+    pickedEl.classList.remove('limit-shake');
     Array.prototype.forEach.call(predRow.querySelectorAll('.cell[data-n]'), function (cell) {
       var on = !!selected[cell.dataset.n];
       cell.classList.toggle('sel', on);
@@ -136,8 +137,10 @@
       countEl.classList.remove('bump');
       void countEl.offsetWidth;
       countEl.classList.add('bump');
-      var selectionMsg = document.getElementById('selection-msg');
-      selectionMsg.textContent = '選択できる数字は7個までです';
+      // 選択済みの7枠だけを短く揺らす。選択欄にはメッセージを表示しない。
+      pickedEl.classList.remove('limit-shake');
+      void pickedEl.offsetWidth;
+      pickedEl.classList.add('limit-shake');
       if (typeof navigator.vibrate === 'function') {
         try { navigator.vibrate(100); } catch (_) {}
       }
