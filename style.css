@@ -10,11 +10,16 @@
   --cols: 37;
   --head-h: calc(30px * var(--z));
   --row-h: calc(44px * var(--z));
-  --pred-h: calc(62px * var(--z));
+  /* 改善C: 数字マスの上下に広げるタップ領域(見た目は変えない)。縮尺が小さいほど効く(旧版比 40%で約1.5倍・50%で約1.4倍)。
+     上は予想欄の上余白(7px)、下は予想欄の下余白に収める。上限6px。 */
+  --tap-ext: min(calc(10px * var(--z)), 6px);
+  /* 予想欄の高さ。従来は 62px×倍率 だったが、小さい倍率では上余白7px+行+下のタップ領域が収まらないため、必要な分だけ確保する */
+  --pred-h: max(calc(62px * var(--z)), calc(7px + 48px * var(--z) + var(--tap-ext)));
   --stat-h: 40px;
   --pick-h: 38px;                     /* 操作行(縮尺の対象外)。上端から離してタップしやすくする */
 
   --fs-round: max(6px, calc(13px * var(--z)));
+  --fs-date: max(6px, calc(11px * var(--z)));   /* 開催日(下段) */
   --fs-head: max(6px, calc(14px * var(--z)));
   --fs-head-round: max(6px, calc(12px * var(--z)));
   --fs-hit: max(6px, calc(14px * var(--z)));
@@ -101,6 +106,11 @@ body { position: fixed; inset: 0; width: 100%; }
   border-right: 2px solid var(--ink);
 }
 
+/* 改善D: 出目表の開催回欄を縦2段に(上=開催回、下=開催日)。行の高さ(--row-h)は変えない */
+.round.two { flex-direction: column; line-height: 1.1; }
+.round.two .rd-no { font-size: var(--fs-round); font-weight: 700; }
+.round.two .rd-date { font-size: var(--fs-date); font-weight: 500; letter-spacing: -0.02em; }
+
 /* A. 見出し */
 .row.head { height: var(--head-h); }
 .head .round, .head .cell { font-size: var(--fs-head); font-weight: 700; font-variant-numeric: tabular-nums; border-bottom: 2px solid var(--ink); }
@@ -121,6 +131,18 @@ body { position: fixed; inset: 0; width: 100%; }
 
 /* ---- 第2段階:数字選択 ---- */
 .pred .cell[data-n] { cursor: pointer; touch-action: manipulation; }
+/* 改善C: 上下方向だけタップ領域を広げる(見えない領域)。左右はマスの幅ちょうどで、隣のマスとは重ならない。
+   top: 上端の枠3px + 拡張分 / right: 右の罫線(通常1px、10区切り2px)まで */
+.pred .cell[data-n] { position: relative; overflow: visible; }
+.pred .cell[data-n]::before {
+  content: '';
+  position: absolute;
+  top: calc(-3px - var(--tap-ext));
+  bottom: calc(-1 * var(--tap-ext));
+  left: 0;
+  right: -1px;
+}
+.pred .cell.k5[data-n]::before { right: -2px; }
 .pred .cell.sel {
   background: var(--main);
   color: var(--main-ink);

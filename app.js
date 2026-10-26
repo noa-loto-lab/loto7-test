@@ -40,7 +40,7 @@
     return d;
   }
   function buildRow(row, label, cellFn) {
-    row.appendChild(el('round', label));
+    row.appendChild(typeof label === 'string' ? el('round', label) : label);
     for (var c = 1; c <= COLS; c++) row.appendChild(cellFn(c));
   }
   function colClass(c) { return 'cell' + ([9, 19, 29].indexOf(c) !== -1 ? ' k5' : ''); }
@@ -49,20 +49,29 @@
   buildRow(headRow, '開催回', function (c) { return el(colClass(c), c); });
 
   var tableRows = document.getElementById('table-rows');
+  // 開催日 'YYYY/MM/DD' → 'YY/MM/DD'(例: 2026/10/05 → 26/10/05)。日付がないサンプルデータは空欄
+  function shortDate(date) {
+    var m = /^(\d{4})\/(\d{2})\/(\d{2})$/.exec(date || '');
+    return m ? m[1].slice(2) + '/' + m[2] + '/' + m[3] : '';
+  }
   // 履歴表を作り直す(古い回が先頭=上、新しい回が最後=下)。サンプルもCSVも同じ処理を使う
   function renderHistory(list) {
     tableRows.textContent = '';
     list.forEach(function (d) {
       var row = el('row data');
       if (d.date) row.dataset.date = d.date;
-      buildRow(row, '第' + d.round + '回', function (c) {
+      var roundCell = el('round two');   // 縦2段: 上=開催回、下=開催日
+      roundCell.appendChild(el('rd-no', '第' + d.round + '回'));
+      roundCell.appendChild(el('rd-date', shortDate(d.date)));
+      buildRow(row, roundCell, function (c) {
         var main = !!d.nums[c], bonus = !!d.bonus[c], hit = main || bonus;
         return el(colClass(c).replace(' k5', hit ? '' : ' k5') + (main ? ' hit main' : bonus ? ' hit bonus' : ''), hit ? c : '');
       });
       tableRows.appendChild(row);
     });
   }
-  renderHistory(makeData());
+  var sampleData = makeData();   // 保存データがないときだけ表示する仮データ(起動処理 startUp で描画)
+  var draws = [];                // 現在の抽選データ(全回分・開催回の昇順)。表示は最新40回だけ
 
   var predRow = document.getElementById('pred-row');
   buildRow(predRow, '次回予想', function (c) {
@@ -92,6 +101,107 @@
   });
 
   // タッチ方向固定は一旦無効化。まず標準スクロールとタップ操作を優先する。
+
+  // ---- ブラウザ内保存(IndexedDB) ----
+  // draws: 全抽選回(キー=[くじ種別, 開催回]) / kv: メタ情報と選択数字(キー=種別付き)
+  // くじ種別(LOTTERY)ごとにキーを分けているので、将来のロト6・ミニロトも別の値で並べて保存できる。
+  var LOTTERY = 'loto7';
+  var DB_NAME = 'loto7-prediction', DB_VERSION = 1;
+  var KEY_META = 'meta:' + LOTTERY, KEY_SEL = 'selected:' + LOTTERY;
+  var dbHandle = null;      // 開けたDB。nullなら保存なし(memoryOnly)
+  var memoryOnly = false;   // 保存機能が使えない端末(プライベートブラウズ等)。画面上だけで動く
+  var ready = false;        // 起動処理(保存データの読み出し)が終わるまで数字の選択を受け付けない
+  var busy = false;         // CSVの保存中は数字の選択・クリア・CSV読み込みを受け付けない
+
+  function drawRange() { return IDBKeyRange.bound([LOTTERY, 0], [LOTTERY, Infinity]); }
+  function numKeys(o) { return Object.keys(o).map(Number).sort(function (a, b) { return a - b; }); }
+
+  function openDb() {
+    return new Promise(function (resolve, reject) {
+      if (!window.indexedDB) { reject(new Error('IndexedDB未対応')); return; }
+      var req;
+      try { req = indexedDB.open(DB_NAME, DB_VERSION); } catch (e) { reject(e); return; }
+      req.onupgradeneeded = function () {
+        var d = req.result;
+        if (!d.objectStoreNames.contains('draws')) d.createObjectStore('draws', { keyPath: ['lottery', 'round'] });
+        if (!d.objectStoreNames.contains('kv')) d.createObjectStore('kv', { keyPath: 'key' });
+      };
+      req.onsuccess = function () { resolve(req.result); };
+      req.onerror = function () { reject(req.error || new Error('open失敗')); };
+      req.onblocked = function () { reject(new Error('open待ち')); };
+    });
+  }
+
+  // 保存データの読み出し。形式が正しい抽選回だけを採用する
+  function validStored(r) {
+    function ok(a, n) {
+      if (!Array.isArray(a) || a.length !== n) return false;
+      for (var i = 0; i < a.length; i++) if (!(a[i] >= 1 && a[i] <= COLS && Math.floor(a[i]) === a[i])) return false;
+      return true;
+    }
+    return r && r.round >= 1 && ok(r.nums, PICK) && ok(r.bonus, BONUS);
+  }
+  function loadSaved(d) {
+    return new Promise(function (resolve, reject) {
+      var out = { draws: [], meta: null, selected: null };
+      var tx = d.transaction(['draws', 'kv'], 'readonly');
+      tx.objectStore('draws').getAll(drawRange()).onsuccess = function (e) {
+        e.target.result.forEach(function (r) {
+          if (!validStored(r)) return;
+          var nums = {}, bonus = {};
+          r.nums.forEach(function (v) { nums[v] = true; });
+          r.bonus.forEach(function (v) { bonus[v] = true; });
+          out.draws.push({ round: r.round, date: r.date || '', nums: nums, bonus: bonus });
+        });
+        out.draws.sort(function (a, b) { return a.round - b.round; });
+      };
+      tx.objectStore('kv').get(KEY_META).onsuccess = function (e) { out.meta = e.target.result || null; };
+      tx.objectStore('kv').get(KEY_SEL).onsuccess = function (e) { out.selected = e.target.result || null; };
+      tx.oncomplete = function () { resolve(out); };
+      tx.onerror = function () { reject(tx.error || new Error('読み出し失敗')); };
+      tx.onabort = function () { reject(tx.error || new Error('読み出し中断')); };
+    });
+  }
+
+  // CSVの全置換。抽選データの入れ替えと選択数字の消去を1つのトランザクションで行う。
+  // どこかで失敗すると全体が取り消され、以前の抽選データ・選択数字がそのまま残る。
+  // 完了(oncomplete)してはじめて成功扱いにする。
+  function persistReplace(list, meta) {
+    return new Promise(function (resolve, reject) {
+      var tx;
+      try { tx = dbHandle.transaction(['draws', 'kv'], 'readwrite'); } catch (e) { reject(e); return; }
+      tx.oncomplete = function () { resolve(); };
+      tx.onerror = function () { reject(tx.error || new Error('保存失敗')); };
+      tx.onabort = function () { reject(tx.error || new Error('保存中断')); };
+      try {
+        var ds = tx.objectStore('draws'), kv = tx.objectStore('kv');
+        ds.delete(drawRange());
+        list.forEach(function (x) {
+          ds.put({ lottery: LOTTERY, round: x.round, date: x.date, nums: numKeys(x.nums), bonus: numKeys(x.bonus) });
+        });
+        kv.put({ key: KEY_META, fileName: meta.fileName, count: meta.count, latestRound: meta.latestRound, latestDate: meta.latestDate, savedAt: meta.savedAt });
+        kv.delete(KEY_SEL);
+      } catch (e) { try { tx.abort(); } catch (_) {} reject(e); }
+    });
+  }
+
+  // 選択数字の保存(0個のときは保存データごと消す)
+  var selSaveFailShown = false;
+  function saveSelection() {
+    if (memoryOnly || !dbHandle) return;
+    var arr = numKeys(selected);
+    try {
+      var tx = dbHandle.transaction(['kv'], 'readwrite'), kv = tx.objectStore('kv');
+      if (arr.length) kv.put({ key: KEY_SEL, numbers: arr }); else kv.delete(KEY_SEL);
+      tx.oncomplete = function () { selSaveFailShown = false; };
+      tx.onabort = tx.onerror = function () { selSaveFailed(); };
+    } catch (e) { selSaveFailed(); }
+  }
+  function selSaveFailed() {
+    if (selSaveFailShown) return;   // 連続して失敗しても通知は1回だけ
+    selSaveFailShown = true;
+    showMsg(true, '選択を保存できませんでした', ['選択はこの画面では使えますが、閉じると消える可能性があります。']);
+  }
 
   // ---- 数字選択(第2段階) ----
   var MAX_SELECT = 7;
@@ -124,7 +234,11 @@
     });
   }
 
+  var predRound = predRow.querySelector('.round');
   predRow.addEventListener('click', function (e) {
+    if (!ready || busy) return;
+    // タップ領域を上下に広げたため、左端の固定列(次回予想)の上下の余白は、下に隠れたマスに届く。固定列の範囲は無視する
+    if (predRound && e.clientX < predRound.getBoundingClientRect().right) return;
     var cell = e.target.closest('.cell[data-n]');
     if (!cell) return;
     var n = cell.dataset.n;
@@ -147,9 +261,15 @@
       return;
     }
     render();
+    saveSelection();   // 選択・解除のたびに保存
   });
 
-  clearBtn.addEventListener('click', function () { selected = {}; render(); });
+  clearBtn.addEventListener('click', function () {
+    if (!ready || busy) return;
+    selected = {};
+    render();
+    saveSelection();   // 0個 → 保存済みの選択も消去
+  });
   render();
 
   // ---- 初期位置:新しい回(下側)を表示 ----
@@ -399,6 +519,7 @@
 
   function loadCsvFile(file) {
     if (!file) return;
+    if (!ready || busy) { showMsg(true, '少し待ってください', ['保存の準備中、または保存中です。数秒後にもう一度お試しください。', '以前のデータはそのままです。']); return; }
     if (file.size > MAX_CSV_BYTES) { showMsg(true, '読み込めませんでした', ['ファイルが大きすぎます(5MBまで)。', '元の履歴はそのままです。']); return; }
     var reader = new FileReader();
     reader.onerror = function () { showMsg(true, '読み込めませんでした', ['ファイルを読み取れませんでした。', '元の履歴はそのままです。']); };
@@ -413,21 +534,48 @@
         showMsg(true, 'CSVに問題があります(' + result.errors.length + '件)', lines);
         return;
       }
-      // 検証に成功したときだけ履歴を入れ替える(選択済みの数字・倍率・色・横スクロール位置はそのまま)
+      // 検証に成功したら、まずブラウザへの保存(全件置換+選択数字の消去)を完了させる。
+      // 保存できたときだけ画面の抽選データを切り替え、選択数字をリセットする。失敗したら以前の抽選データ・選択数字を維持する
       var list = result.list.sort(function (a, b) { return a.round - b.round; });
-      var shown = list.slice(-SHOW_ROUNDS);
       var latest = list[list.length - 1];
-      renderHistory(shown);
-      toBottom();   // 最新回(最下段)が見える位置へ
-      csvInfo.textContent = latest.round + '回';   // 操作行では短く表示(ファイル名はタップ後のメッセージに表示)
-      csvInfo.title = file.name;
-      showMsg(false, '読み込みました', [
-        'ファイル:' + file.name,
-        list.length + '回分(第' + list[0].round + '〜' + latest.round + '回)',
-        '最新:第' + latest.round + '回(' + latest.date + ')。直近' + shown.length + '回を表示しています。'
-      ]);
+      var meta = { fileName: file.name, count: list.length, latestRound: latest.round, latestDate: latest.date, savedAt: Date.now() };
+      function applyNew(extra) {
+        draws = list;
+        showDraws(meta);
+        selected = {};   // 次の抽選回の予想を始める(保存側の選択は保存処理の中で消去済み)
+        render();
+        toBottom();      // 最新回(最下段)が見える位置へ
+        var shown = Math.min(SHOW_ROUNDS, list.length);
+        showMsg(false, '読み込みました', [
+          'ファイル:' + file.name,
+          list.length + '回分(第' + list[0].round + '〜' + latest.round + '回)',
+          '最新:第' + latest.round + '回(' + latest.date + ')。直近' + shown + '回を表示しています。',
+          '選択数字をリセットしました。次回の予想を始められます。'
+        ].concat(extra));
+      }
+      if (memoryOnly) { applyNew(['※この端末では保存できません。画面を閉じると消えます。']); return; }
+      busy = true;
+      persistReplace(list, meta).then(function () {
+        busy = false;
+        applyNew([]);
+      }, function () {
+        busy = false;
+        showMsg(true, '保存できませんでした', [
+          'CSVの内容をブラウザに保存できなかったため、読み込みを取り消しました。',
+          '以前の抽選データと選択数字はそのままです。',
+          '端末の空き容量を確認して、もう一度お試しください。'
+        ]);
+      });
     };
     reader.readAsArrayBuffer(file);
+  }
+
+  // 現在の抽選データ(draws)から、直近の表示回数だけを表に出す。操作行の「n回」も更新
+  function showDraws(meta) {
+    renderHistory(draws.slice(-SHOW_ROUNDS));
+    var latest = draws[draws.length - 1];
+    csvInfo.textContent = latest.round + '回';   // 操作行では短く表示(ファイル名はタップ後のメッセージに表示)
+    csvInfo.title = (meta && meta.fileName) || '';
   }
 
   csvBtn.addEventListener('click', function () { csvInput.click(); });
@@ -436,6 +584,48 @@
     loadCsvFile(f);
     csvInput.value = '';   // 同じファイルをもう一度選べるようにする
   });
+
+  // ---- 起動:保存済みの抽選データ・選択数字を復元 ----
+  function startUp(saved) {
+    if (saved && saved.draws.length) {
+      draws = saved.draws;
+      showDraws(saved.meta);
+    } else {
+      renderHistory(sampleData);   // 保存データなし → 仮データ(従来どおり「サンプル」表示)
+    }
+    var sel = saved && saved.selected && saved.selected.numbers;
+    if (Array.isArray(sel) && sel.length <= MAX_SELECT) {
+      var ok = true, tmp = {};
+      sel.forEach(function (v) { if (!(v >= 1 && v <= COLS && Math.floor(v) === v) || tmp[v]) ok = false; tmp[v] = true; });
+      if (ok) selected = tmp;   // 壊れた保存データは無視
+    }
+    render();
+    toBottom();
+    ready = true;
+    try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(function () {}); } catch (_) {}   // 可能ならブラウザに保存の維持を依頼(失敗しても動作に影響なし)
+  }
+  function init() {
+    var settled = false, timer;
+    function fallback(reason) {   // 保存機能が使えない → 画面上だけで動かし、その旨を通知
+      if (settled) return;
+      settled = true; clearTimeout(timer);
+      memoryOnly = true;
+      startUp(null);
+      showMsg(true, '保存機能が使えません', [reason, '読み込んだCSVや選択数字は、この画面を閉じると消えます。(プライベートブラウズ中の場合は解除してください)']);
+    }
+    timer = setTimeout(function () { fallback('保存機能の準備が終わりませんでした。'); }, 5000);
+    openDb().then(function (d) {
+      if (settled) { d.close(); return; }
+      d.onversionchange = function () { d.close(); dbHandle = null; };
+      return loadSaved(d).then(function (saved) {
+        if (settled) { d.close(); return; }
+        settled = true; clearTimeout(timer);
+        dbHandle = d;
+        startUp(saved);
+      });
+    }).catch(function () { fallback('ブラウザの保存機能(IndexedDB)を使えませんでした。'); });
+  }
+  init();
 
   toBottom();
   window.addEventListener('load', toBottom);
