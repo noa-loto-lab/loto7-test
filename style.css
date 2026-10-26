@@ -392,7 +392,7 @@ body { position: fixed; inset: 0; width: 100%; }
   touch-action: manipulation;
 }
 #bottom-nav button:last-child { border-right: 0; }
-#bottom-nav button[aria-current="page"] { background: var(--ink); color: #fff; }
+#bottom-nav button[aria-current="page"] { background: #5b5f66; color: #fff; }
 #nav-count { margin-left: 6px; font-size: 12px; font-weight: 700; opacity: .85; }
 #nav-count:empty { display: none; }
 
@@ -453,7 +453,7 @@ body { position: fixed; inset: 0; width: 100%; }
 /* 選択行の「予想メモに追加」 */
 #memo-add {
   flex: none; height: 30px; padding: 0 9px; font: inherit; font-size: 12px; font-weight: 800;
-  color: #fff; background: var(--ink); border: 1px solid var(--ink); border-radius: 6px; touch-action: manipulation;
+  color: var(--ink); background: var(--paper-alt); border: 1px solid var(--ink); border-radius: 6px; touch-action: manipulation;
 }
 #memo-add.short { color: var(--ink); background: var(--paper-alt); }   /* 7個に満たないとき(押すと不足を表示) */
 #memo-add:active { filter: brightness(.9); }
