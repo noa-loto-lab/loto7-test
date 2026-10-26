@@ -392,7 +392,7 @@ body { position: fixed; inset: 0; width: 100%; }
   touch-action: manipulation;
 }
 #bottom-nav button:last-child { border-right: 0; }
-#bottom-nav button[aria-current="page"] { background: #5b5f66; color: #fff; }
+#bottom-nav button[aria-current="page"] { background: #777b82; color: #fff; }
 #nav-count { margin-left: 6px; font-size: 12px; font-weight: 700; opacity: .85; }
 #nav-count:empty { display: none; }
 
