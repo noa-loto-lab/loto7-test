@@ -38,6 +38,7 @@
       <span class="chip-slot" data-slot="6"></span>
     </div>
     <button id="clear-btn" type="button" disabled>クリア</button>
+    <button id="memo-add" type="button" aria-label="選択中の7数字を予想メモに追加">予想メモに追加</button>
     <span id="selection-msg" role="status" aria-live="polite"></span>
   </div>
   <!-- 色設定パネル(操作行の下に重ねて表示。レイアウトには影響しない) -->
@@ -77,6 +78,37 @@
   <div id="table-scroll" class="vscroll"><div id="table-h" class="hscroll"><div id="table-rows"></div></div></div>
   <!-- C. 次回予想欄(下部固定) -->
   <div id="pred-scroll" class="hscroll"><div id="pred-row" class="row pred"></div></div>
+  <!-- 画面下部の固定メニュー:出目表 / 予想メモ -->
+  <nav id="bottom-nav" aria-label="画面の切り替え">
+    <button id="nav-table" type="button" aria-current="page">出目表</button>
+    <button id="nav-memo" type="button" aria-current="false">予想メモ<span id="nav-count"></span></button>
+  </nav>
+  <!-- 予想メモ画面(出目表の上に重ねて表示。出目表のスクロール位置・縮尺・選択は保たれる) -->
+  <section id="memo-screen" aria-label="予想メモ" hidden>
+    <div id="memo-head">
+      <label id="memo-round-label">対象回<select id="memo-round" aria-label="表示する抽選回"></select></label>
+      <span id="memo-target"></span>
+      <div id="memo-filter" role="group" aria-label="絞り込み">
+        <button type="button" data-filter="all" aria-pressed="true">すべて<span class="mf-n"></span></button>
+        <button type="button" data-filter="buy" aria-pressed="false">★ 買う<span class="mf-n"></span></button>
+        <button type="button" data-filter="maybe" aria-pressed="false">？ 迷い中<span class="mf-n"></span></button>
+      </div>
+    </div>
+    <div id="memo-warn" hidden>この端末では予想メモを保存できません。画面を閉じると消えます(プライベートブラウズ中の場合は解除してください)。</div>
+    <div id="memo-list" role="list"></div>
+  </section>
+  <!-- 確認ダイアログ・短いお知らせ -->
+  <div id="confirm" role="alertdialog" aria-modal="true" aria-labelledby="cf-title" hidden>
+    <div class="cf-box">
+      <div class="cf-title" id="cf-title"></div>
+      <div class="cf-text" id="cf-text"></div>
+      <div class="cf-btns">
+        <button id="cf-cancel" type="button">キャンセル</button>
+        <button id="cf-ok" type="button"></button>
+      </div>
+    </div>
+  </div>
+  <div id="toast" role="status" aria-live="polite" hidden></div>
 </div>
 <script src="app.js"></script>
 </body>

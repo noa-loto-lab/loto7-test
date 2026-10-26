@@ -16,6 +16,7 @@
   /* 予想欄の高さ。従来は 62px×倍率 だったが、小さい倍率では上余白7px+行+下のタップ領域が収まらないため、必要な分だけ確保する */
   --pred-h: max(calc(62px * var(--z)), calc(7px + 48px * var(--z) + var(--tap-ext)));
   --stat-h: 40px;
+  --nav-h: 44px;                      /* 画面下部の固定メニュー(出目表 / 予想メモ) */
   --pick-h: 38px;                     /* 操作行(縮尺の対象外)。上端から離してタップしやすくする */
 
   --fs-round: max(6px, calc(13px * var(--z)));
@@ -59,7 +60,7 @@ body { position: fixed; inset: 0; width: 100%; }
   position: absolute;
   inset: 0;
   display: grid;
-  grid-template-rows: var(--stat-h) var(--pick-h) var(--head-h) minmax(0, 1fr) var(--pred-h);
+  grid-template-rows: var(--stat-h) var(--pick-h) var(--head-h) minmax(0, 1fr) var(--pred-h) var(--nav-h);
   /* 横向き時のノッチ・ホームバー対策 */
   padding: 0 env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
 }
@@ -124,7 +125,7 @@ body { position: fixed; inset: 0; width: 100%; }
 
 /* C. 予想欄 */
 .row.pred { height: calc(48px * var(--z)); }
-#pred-scroll { display: flex; align-items: flex-start; padding-top: 7px; padding-bottom: max(7px, env(safe-area-inset-bottom, 0px)); }
+#pred-scroll { display: flex; align-items: flex-start; padding-top: 7px; padding-bottom: 7px; }   /* 下の安全領域は #app の余白が確保する(固定メニューの下) */
 .pred .round, .pred .cell { border-top: 3px solid var(--accent); border-bottom: 0; background: var(--paper); }
 .pred .cell.k5 { background: transparent; border-right: 2px solid #8f8b80; }
 .pred .round { color: var(--accent); }
@@ -372,3 +373,108 @@ body { position: fixed; inset: 0; width: 100%; }
 @media (prefers-reduced-motion: reduce) {
   #picked.limit-shake .chip-slot { animation: none; }
 }
+
+/* ================= v4.0 予想メモ ================= */
+@media (orientation: landscape) and (max-height: 520px) { :root { --nav-h: 38px; } }
+
+/* 画面下部の固定メニュー */
+#bottom-nav {
+  position: relative; z-index: 50;
+  display: flex; gap: 0;
+  background: var(--paper);
+  border-top: 2px solid var(--ink);
+}
+#bottom-nav button {
+  flex: 1 1 0; min-width: 0;
+  font: inherit; font-size: 15px; font-weight: 800;
+  color: var(--ink); background: var(--paper);
+  border: 0; border-right: 1px solid var(--line);
+  touch-action: manipulation;
+}
+#bottom-nav button:last-child { border-right: 0; }
+#bottom-nav button[aria-current="page"] { background: var(--ink); color: #fff; }
+#nav-count { margin-left: 6px; font-size: 12px; font-weight: 700; opacity: .85; }
+#nav-count:empty { display: none; }
+
+/* 予想メモ画面 */
+#memo-screen {
+  position: absolute; z-index: 40;
+  left: env(safe-area-inset-left, 0px); right: env(safe-area-inset-right, 0px);
+  top: 0; bottom: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px));
+  display: flex; flex-direction: column;
+  background: var(--paper);
+}
+#memo-screen[hidden] { display: none; }
+#memo-head { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 6px 8px; border-bottom: 1px solid var(--line); font-size: 13px; }
+#memo-round-label { display: flex; align-items: center; gap: 4px; font-weight: 700; }
+#memo-round { height: 32px; font: inherit; font-size: 14px; font-weight: 700; color: var(--ink); background: var(--paper-alt); border: 1px solid var(--ink); border-radius: 6px; padding: 0 4px; max-width: 12em; }
+#memo-target { font-weight: 800; color: var(--accent); }
+#memo-filter { display: flex; gap: 6px; margin-left: auto; }
+#memo-filter button {
+  height: 32px; padding: 0 10px; font: inherit; font-size: 13px; font-weight: 700; color: var(--ink);
+  background: var(--paper-alt); border: 1px solid var(--ink); border-radius: 16px; touch-action: manipulation;
+}
+#memo-filter button[aria-pressed="true"] { background: var(--ink); color: #fff; }
+.mf-n { margin-left: 4px; font-weight: 600; opacity: .85; }
+#memo-warn { flex: none; padding: 6px 10px; font-size: 12px; font-weight: 700; color: #fff; background: var(--accent); }
+#memo-warn[hidden] { display: none; }
+#memo-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding: 6px 0 10px; }
+.memo-empty { padding: 24px 16px; text-align: center; font-size: 14px; line-height: 1.6; color: #5b5f66; }
+
+.memo-card {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px;
+  margin: 0 8px 6px; padding: 5px 8px;
+  background: #fff; border: 1px solid var(--line); border-left: 5px solid var(--line); border-radius: 8px;
+}
+.memo-card.buy { border-left-color: #e0a800; background: #fffaea; }
+.memo-card.maybe { border-left-color: #3b6fb6; background: #f0f5fc; }
+.memo-card.flash { animation: memo-flash 1.4s ease-out; }
+@keyframes memo-flash { 0%, 40% { box-shadow: 0 0 0 3px var(--accent); } 100% { box-shadow: 0 0 0 0 transparent; } }
+.mc-id { flex: none; min-width: 3.9em; display: flex; flex-direction: column; line-height: 1.2; }
+.mc-label { font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.mc-from { padding: 0; margin: 0; border: 0; background: none; font: inherit; font-size: 10px; font-weight: 700; color: var(--accent); text-align: left; text-decoration: underline; touch-action: manipulation; }
+.mc-nums { flex: 1 1 auto; min-width: 0; display: flex; flex-wrap: nowrap; gap: 3px; }
+.mc-num {
+  flex: 0 0 auto; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
+  border-radius: 4px; background: var(--main); color: var(--main-ink);
+  font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums;
+}
+.mc-actions { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+.mc-actions button {
+  height: 32px; padding: 0 9px; font: inherit; font-size: 13px; font-weight: 700; color: var(--ink);
+  background: var(--paper-alt); border: 1px solid var(--ink); border-radius: 6px; touch-action: manipulation;
+}
+.mc-actions .mc-mark { min-width: 36px; padding: 0; font-size: 17px; line-height: 1; }
+.mc-actions .mc-mark[aria-pressed="true"][data-mark="buy"] { background: #e0a800; border-color: #8a6700; }
+.mc-actions .mc-mark[aria-pressed="true"][data-mark="maybe"] { background: #3b6fb6; border-color: #24467a; color: #fff; }
+.mc-actions .mc-del { color: #a11a1a; border-color: #a11a1a; }
+.mc-actions button:active { filter: brightness(.9); }
+
+/* 選択行の「予想メモに追加」 */
+#memo-add {
+  flex: none; height: 30px; padding: 0 9px; font: inherit; font-size: 12px; font-weight: 800;
+  color: #fff; background: var(--ink); border: 1px solid var(--ink); border-radius: 6px; touch-action: manipulation;
+}
+#memo-add.short { color: var(--ink); background: var(--paper-alt); }   /* 7個に満たないとき(押すと不足を表示) */
+#memo-add:active { filter: brightness(.9); }
+#selection-msg:not(:empty) { display: block; font-size: 11px; font-weight: 700; }   /* 呼び出し元の予想の表示 */
+
+/* 確認ダイアログ・お知らせ・結果メッセージ */
+#confirm { position: absolute; inset: 0; z-index: 80; display: flex; align-items: center; justify-content: center; padding: 12px; background: rgba(0, 0, 0, .45); }
+#confirm[hidden] { display: none; }
+.cf-box { width: min(420px, 100%); padding: 12px 14px; background: var(--paper); border: 1px solid var(--ink); border-radius: 10px; box-shadow: 0 8px 24px rgba(0, 0, 0, .35); }
+.cf-title { font-size: 15px; font-weight: 800; margin-bottom: 4px; }
+.cf-text { font-size: 13px; line-height: 1.5; margin-bottom: 10px; word-break: break-all; }
+.cf-btns { display: flex; justify-content: flex-end; gap: 10px; }
+.cf-btns button { height: 36px; padding: 0 14px; font: inherit; font-size: 14px; font-weight: 800; color: var(--ink); background: var(--paper-alt); border: 1px solid var(--ink); border-radius: 8px; touch-action: manipulation; }
+.cf-btns button.danger { color: #fff; background: #a11a1a; border-color: #a11a1a; }
+.cf-btns button.primary { color: #fff; background: var(--ink); }
+#toast {
+  position: absolute; z-index: 90; left: 50%; transform: translateX(-50%);
+  bottom: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px) + 10px);
+  max-width: calc(100% - 24px); padding: 8px 14px; border-radius: 8px;
+  background: rgba(35, 38, 43, .95); color: #fff; font-size: 13px; font-weight: 700; line-height: 1.4; text-align: center; pointer-events: none;
+}
+#toast.warn { background: #a11a1a; }
+#toast[hidden] { display: none; }
+#csv-msg { z-index: 70; }   /* 予想メモ画面(z=40)や下部メニューより前に出す */

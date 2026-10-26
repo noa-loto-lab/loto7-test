@@ -192,7 +192,7 @@
     var arr = numKeys(selected);
     try {
       var tx = dbHandle.transaction(['kv'], 'readwrite'), kv = tx.objectStore('kv');
-      if (arr.length) kv.put({ key: KEY_SEL, numbers: arr }); else kv.delete(KEY_SEL);
+      if (arr.length) kv.put({ key: KEY_SEL, numbers: arr, from: fromMemo || null }); else kv.delete(KEY_SEL);   // from: 予想メモから呼び出した場合の元予想
       tx.oncomplete = function () { selSaveFailShown = false; };
       tx.onabort = tx.onerror = function () { selSaveFailed(); };
     } catch (e) { selSaveFailed(); }
@@ -232,6 +232,7 @@
       cell.setAttribute('aria-pressed', on ? 'true' : 'false');
       cell.textContent = on ? cell.dataset.n : '';
     });
+    afterRender();   // v4.0: 予想メモ追加ボタンと呼び出し元表示の更新
   }
 
   var predRound = predRow.querySelector('.round');
@@ -260,6 +261,7 @@
       }
       return;
     }
+    if (!selectedCount()) fromMemo = null;   // v4.0: 全部外したら呼び出し元の表示も消す
     render();
     saveSelection();   // 選択・解除のたびに保存
   });
@@ -267,6 +269,7 @@
   clearBtn.addEventListener('click', function () {
     if (!ready || busy) return;
     selected = {};
+    fromMemo = null;   // v4.0
     render();
     saveSelection();   // 0個 → 保存済みの選択も消去
   });
@@ -543,6 +546,7 @@
         draws = list;
         showDraws(meta);
         selected = {};   // 次の抽選回の予想を始める(保存側の選択は保存処理の中で消去済み)
+        fromMemo = null; // v4.0: 呼び出し元の表示も消す
         render();
         toBottom();      // 最新回(最下段)が見える位置へ
         var shown = Math.min(SHOW_ROUNDS, list.length);
@@ -550,8 +554,11 @@
           'ファイル:' + file.name,
           list.length + '回分(第' + list[0].round + '〜' + latest.round + '回)',
           '最新:第' + latest.round + '回(' + latest.date + ')。直近' + shown + '回を表示しています。',
-          '選択数字をリセットしました。次回の予想を始められます。'
+          '選択数字をリセットしました。次回の予想を始められます。',
+          '予想メモの対象を第' + (latest.round + 1) + '回に切り替えました(過去回の予想メモは残っています)。'
         ].concat(extra));
+        memoViewKey = null;   // v4.0: 予想メモ画面は新しい対象回を表示
+        renderMemo();
       }
       if (memoryOnly) { applyNew(['※この端末では保存できません。画面を閉じると消えます。']); return; }
       busy = true;
@@ -585,6 +592,395 @@
     csvInput.value = '';   // 同じファイルをもう一度選べるようにする
   });
 
+  // ======================================================================
+  // v4.0 予想メモ
+  //  - 保存先は専用のIndexedDB(loto7-memo)。抽選履歴・選択数字のDB(loto7-prediction)は変更しない
+  //    (同じオリジンの別ページが古い版の同名DBを開いていても、バージョン違いで壊さないため)
+  //  - 対象回は保存せず、現在の抽選データの最新回+1から求める(CSVを読み込めば自動で切り替わる)
+  //  - 予想の追加・マーク変更・削除は、保存に成功してから画面に反映する(失敗時は通知して変更しない)
+  // ======================================================================
+  var MEMO_DB_NAME = 'loto7-memo', MEMO_DB_VERSION = 1;
+  var memoDb = null, memoMemoryOnly = false, memoReady = false, memoBusy = false, memoWarned = false;
+  var memos = [];            // 全予想(保存順)。各要素: {id, target, round, numbers[7], mark, seq, createdAt, fromId, fromSeq, fromTarget}
+  var memoLocalId = 0, memoLocalSeq = {};   // 保存できない端末用(画面上だけ)
+  var fromMemo = null;       // いまの選択の呼び出し元 {id, seq, target}
+  var memoFilter = 'all';    // all | buy | maybe
+  var memoViewKey = null;    // 予想メモ画面で表示中の対象回(null=作成中の回)
+  var view = 'table';        // table | memo
+
+  var memoScreen = document.getElementById('memo-screen');
+  var memoList = document.getElementById('memo-list');
+  var memoRoundSel = document.getElementById('memo-round');
+  var memoTargetEl = document.getElementById('memo-target');
+  var memoWarnEl = document.getElementById('memo-warn');
+  var memoAddBtn = document.getElementById('memo-add');
+  var navTable = document.getElementById('nav-table');
+  var navMemo = document.getElementById('nav-memo');
+  var navCount = document.getElementById('nav-count');
+  var toastEl = document.getElementById('toast');
+  var toastTimer = null;
+
+  var MARKS = { buy: '★', maybe: '？' };
+
+  function currentTarget() {   // 作成中の対象回:最新回+1。CSV未読込(サンプル表示)のときは 'sample'
+    if (draws.length) { var r = draws[draws.length - 1].round + 1; return { key: 'r' + r, round: r, sample: false }; }
+    return { key: 'sample', round: null, sample: true };
+  }
+  function targetLabel(key) { return key === 'sample' ? 'サンプル(CSV未読込)' : '第' + key.slice(1) + '回'; }
+
+  function toast(msg, warn) {
+    clearTimeout(toastTimer);
+    toastEl.textContent = msg;
+    toastEl.classList.toggle('warn', !!warn);
+    toastEl.hidden = false;
+    toastTimer = setTimeout(function () { toastEl.hidden = true; }, warn ? 3600 : 2400);
+  }
+
+  // 確認ダイアログ(Promise<boolean>)
+  var cfEl = document.getElementById('confirm'), cfOk = document.getElementById('cf-ok'), cfCancel = document.getElementById('cf-cancel');
+  var cfResolve = null;
+  function askConfirm(title, text, okLabel, kind) {
+    return new Promise(function (resolve) {
+      if (cfResolve) cfResolve(false);
+      cfResolve = resolve;
+      document.getElementById('cf-title').textContent = title;
+      document.getElementById('cf-text').textContent = text;
+      cfOk.textContent = okLabel;
+      cfOk.className = kind || 'primary';
+      cfEl.hidden = false;
+    });
+  }
+  function closeConfirm(v) { cfEl.hidden = true; var r = cfResolve; cfResolve = null; if (r) r(v); }
+  cfOk.addEventListener('click', function () { closeConfirm(true); });
+  cfCancel.addEventListener('click', function () { closeConfirm(false); });
+
+  // ---- 保存(IndexedDB) ----
+  function openMemoDb() {
+    return new Promise(function (resolve, reject) {
+      if (!window.indexedDB) { reject(new Error('IndexedDB未対応')); return; }
+      var req;
+      try { req = indexedDB.open(MEMO_DB_NAME, MEMO_DB_VERSION); } catch (e) { reject(e); return; }
+      req.onupgradeneeded = function () {
+        var d = req.result;
+        if (!d.objectStoreNames.contains('memos')) d.createObjectStore('memos', { keyPath: 'id', autoIncrement: true });
+        if (!d.objectStoreNames.contains('meta')) d.createObjectStore('meta', { keyPath: 'key' });   // 対象回ごとの予想番号カウンタ
+      };
+      req.onsuccess = function () { resolve(req.result); };
+      req.onerror = function () { reject(req.error || new Error('open失敗')); };
+      req.onblocked = function () { reject(new Error('open待ち')); };
+    });
+  }
+  function validMemo(r) {
+    if (!r || typeof r.id !== 'number' || typeof r.target !== 'string' || !Array.isArray(r.numbers) || r.numbers.length !== MAX_SELECT) return false;
+    var seen = {};
+    for (var i = 0; i < r.numbers.length; i++) {
+      var v = r.numbers[i];
+      if (!(v >= 1 && v <= COLS) || Math.floor(v) !== v || seen[v]) return false;
+      seen[v] = true;
+    }
+    return true;
+  }
+  function loadMemos(d) {
+    return new Promise(function (resolve, reject) {
+      var out = [];
+      var tx = d.transaction(['memos'], 'readonly');
+      tx.objectStore('memos').getAll().onsuccess = function (e) {
+        e.target.result.forEach(function (r) {
+          if (!validMemo(r)) return;   // 壊れた1件は無視(他の予想は読む)
+          r.numbers = r.numbers.slice().sort(function (a, b) { return a - b; });
+          if (r.mark !== 'buy' && r.mark !== 'maybe') r.mark = '';
+          out.push(r);
+        });
+        out.sort(function (a, b) { return a.id - b.id; });
+      };
+      tx.oncomplete = function () { resolve(out); };
+      tx.onerror = tx.onabort = function () { reject(tx.error || new Error('読み出し失敗')); };
+    });
+  }
+  function dbAddMemo(rec) {   // 予想番号(seq)の採番と追加を1つのトランザクションで行う。完了してはじめて成功
+    return new Promise(function (resolve, reject) {
+      var tx;
+      try { tx = memoDb.transaction(['memos', 'meta'], 'readwrite'); } catch (e) { reject(e); return; }
+      var saved = null;
+      tx.oncomplete = function () { resolve(saved); };
+      tx.onerror = tx.onabort = function () { reject(tx.error || new Error('保存失敗')); };
+      var meta = tx.objectStore('meta'), key = 'seq:' + rec.target;
+      meta.get(key).onsuccess = function (e) {
+        var cur = e.target.result, n = ((cur && cur.value) || 0) + 1;
+        meta.put({ key: key, value: n });
+        rec.seq = n;
+        var rq = tx.objectStore('memos').add(rec);
+        rq.onsuccess = function () { rec.id = rq.result; saved = rec; };
+      };
+    });
+  }
+  function dbPutMemo(rec) {
+    return new Promise(function (resolve, reject) {
+      var tx;
+      try { tx = memoDb.transaction(['memos'], 'readwrite'); tx.objectStore('memos').put(rec); } catch (e) { reject(e); return; }
+      tx.oncomplete = function () { resolve(); };
+      tx.onerror = tx.onabort = function () { reject(tx.error || new Error('保存失敗')); };
+    });
+  }
+  function dbDeleteMemo(id) {
+    return new Promise(function (resolve, reject) {
+      var tx;
+      try { tx = memoDb.transaction(['memos'], 'readwrite'); tx.objectStore('memos').delete(id); } catch (e) { reject(e); return; }
+      tx.oncomplete = function () { resolve(); };
+      tx.onerror = tx.onabort = function () { reject(tx.error || new Error('削除失敗')); };
+    });
+  }
+  function memoSaveFailed(what) {
+    clearTimeout(toastTimer); toastEl.hidden = true;   // 直前の「保存しました」が残って誤解されないように消す
+    showMsg(true, what + 'できませんでした', ['ブラウザへの保存に失敗したため、変更しませんでした(画面の予想メモはそのままです)。', '端末の空き容量を確認して、もう一度お試しください。']);
+  }
+
+  // ---- 追加 ----
+  function addMemo() {
+    if (!ready || busy || !memoReady || memoBusy) { toast('準備中です。少し待ってからもう一度押してください。', true); return; }
+    var n = selectedCount();
+    if (n < MAX_SELECT) {
+      toast('あと' + (MAX_SELECT - n) + '個選んでください(' + MAX_SELECT + '個そろうと保存できます)', true);
+      pickedEl.classList.remove('limit-shake'); void pickedEl.offsetWidth; pickedEl.classList.add('limit-shake');
+      return;
+    }
+    var t = currentTarget();
+    var rec = { lottery: LOTTERY, target: t.key, round: t.round, numbers: numKeys(selected), mark: '', seq: 0, createdAt: Date.now(),
+                fromId: fromMemo ? fromMemo.id : null, fromSeq: fromMemo ? fromMemo.seq : null, fromTarget: fromMemo ? fromMemo.target : null };
+    function done(r) {
+      memos.push(r);
+      memoBusy = false;
+      if (view === 'memo' && memoViewKey !== r.target) memoViewKey = r.target;
+      renderMemo();
+      toast(targetLabel(r.target) + ' 予想' + r.seq + ' に保存しました' + (memoMemoryOnly ? '(この端末では閉じると消えます)' : ''));
+    }
+    memoBusy = true;
+    if (memoMemoryOnly) {
+      memoLocalSeq[rec.target] = (memoLocalSeq[rec.target] || 0) + 1;
+      rec.seq = memoLocalSeq[rec.target]; rec.id = ++memoLocalId;
+      if (!memoWarned) { memoWarned = true; showMsg(true, '保存機能が使えません', ['予想メモは、この画面を閉じると消えます。(プライベートブラウズ中の場合は解除してください)']); }
+      done(rec);
+      return;
+    }
+    dbAddMemo(rec).then(function (r) { done(r); }, function () { memoBusy = false; memoSaveFailed('予想メモに保存'); });
+  }
+  memoAddBtn.addEventListener('click', addMemo);
+
+  // ---- 画面の切り替え ----
+  var overlaid = ['status-bar', 'selection-bar', 'head-scroll', 'table-scroll', 'pred-scroll'];
+  function showView(v) {
+    view = v;
+    var m = v === 'memo';
+    memoScreen.hidden = !m;
+    navTable.setAttribute('aria-current', m ? 'false' : 'page');
+    navMemo.setAttribute('aria-current', m ? 'page' : 'false');
+    overlaid.forEach(function (id) { var e = document.getElementById(id); if ('inert' in e) e.inert = m; });
+    if (m) { setPanel(false); renderMemo(); memoList.scrollTop = 0; }
+  }
+  navTable.addEventListener('click', function () { showView('table'); });
+  navMemo.addEventListener('click', function () { showView('memo'); });
+
+  // ---- 予想メモ画面の描画 ----
+  function memoKeys() {   // 表示できる対象回:作成中の回 → 新しい回順 → サンプル
+    var cur = currentTarget().key, seen = {}, keys = [];
+    memos.forEach(function (m) { seen[m.target] = true; });
+    seen[cur] = true;
+    Object.keys(seen).forEach(function (k) { if (k !== cur) keys.push(k); });
+    keys.sort(function (a, b) {
+      if (a === 'sample') return 1; if (b === 'sample') return -1;
+      return Number(b.slice(1)) - Number(a.slice(1));
+    });
+    return [cur].concat(keys);
+  }
+  function renderMemo() {
+    var cur = currentTarget().key;
+    var inCur = memos.filter(function (m) { return m.target === cur; }).length;
+    navCount.textContent = inCur ? String(inCur) : '';
+    memoWarnEl.hidden = !memoMemoryOnly;
+    if (!memoScreen || memoScreen.hidden) return;   // 画面を開いたときに描画する(navCountだけは常に更新)
+
+    var keys = memoKeys();
+    if (!memoViewKey || keys.indexOf(memoViewKey) === -1) memoViewKey = cur;
+    memoRoundSel.textContent = '';
+    keys.forEach(function (k) {
+      var n = memos.filter(function (m) { return m.target === k; }).length;
+      var o = document.createElement('option');
+      o.value = k;
+      o.textContent = targetLabel(k) + (k === cur ? ' 作成中' : '') + '(' + n + '口)';
+      memoRoundSel.appendChild(o);
+    });
+    memoRoundSel.value = memoViewKey;
+    memoTargetEl.textContent = '作成中:' + targetLabel(cur);
+
+    var all = memos.filter(function (m) { return m.target === memoViewKey; });
+    var cnt = { all: all.length, buy: 0, maybe: 0 };
+    all.forEach(function (m) { if (m.mark) cnt[m.mark]++; });
+    Array.prototype.forEach.call(document.querySelectorAll('#memo-filter button'), function (b) {
+      var f = b.dataset.filter;
+      b.setAttribute('aria-pressed', f === memoFilter ? 'true' : 'false');
+      b.querySelector('.mf-n').textContent = cnt[f];
+    });
+    var shown = all.filter(function (m) { return memoFilter === 'all' || m.mark === memoFilter; });   // 保存順(予想1が上)
+
+    memoList.textContent = '';
+    if (!shown.length) {
+      var empty = document.createElement('div');
+      empty.className = 'memo-empty';
+      empty.textContent = !all.length
+        ? (memoViewKey === cur ? 'まだ予想がありません。出目表で7個の数字を選び、「予想メモに追加」を押してください。' : 'この回の予想はありません。')
+        : 'この条件の予想はありません。';
+      memoList.appendChild(empty);
+      return;
+    }
+    shown.forEach(function (m) {
+      var card = document.createElement('div');
+      card.className = 'memo-card' + (m.mark ? ' ' + m.mark : '');
+      card.dataset.id = m.id;
+      card.setAttribute('role', 'listitem');
+
+      var idBox = document.createElement('div'); idBox.className = 'mc-id';
+      var lab = document.createElement('span'); lab.className = 'mc-label'; lab.textContent = '予想' + m.seq;
+      idBox.appendChild(lab);
+      if (m.fromId) {   // 呼び出して修正した予想:元の予想を確認できる
+        var fb = document.createElement('button'); fb.type = 'button'; fb.className = 'mc-from'; fb.dataset.act = 'from'; fb.dataset.id = m.id;
+        fb.textContent = '元:' + (m.fromTarget && m.fromTarget !== m.target ? targetLabel(m.fromTarget) : '') + '予想' + m.fromSeq;
+        idBox.appendChild(fb);
+      }
+      card.appendChild(idBox);
+
+      var nums = document.createElement('div'); nums.className = 'mc-nums';
+      m.numbers.forEach(function (v) { var s2 = document.createElement('span'); s2.className = 'mc-num'; s2.textContent = v; nums.appendChild(s2); });
+      card.appendChild(nums);
+
+      var act = document.createElement('div'); act.className = 'mc-actions';
+      ['buy', 'maybe'].forEach(function (k) {
+        var b = document.createElement('button'); b.type = 'button'; b.className = 'mc-mark'; b.dataset.act = 'mark'; b.dataset.mark = k; b.dataset.id = m.id;
+        b.textContent = MARKS[k]; b.setAttribute('aria-pressed', m.mark === k ? 'true' : 'false');
+        b.setAttribute('aria-label', (k === 'buy' ? '買う' : '迷い中') + 'のマーク');
+        act.appendChild(b);
+      });
+      var ob = document.createElement('button'); ob.type = 'button'; ob.className = 'mc-open'; ob.dataset.act = 'open'; ob.dataset.id = m.id; ob.textContent = '出目表で開く';
+      var db = document.createElement('button'); db.type = 'button'; db.className = 'mc-del'; db.dataset.act = 'del'; db.dataset.id = m.id; db.textContent = '削除';
+      act.appendChild(ob); act.appendChild(db);
+      card.appendChild(act);
+      memoList.appendChild(card);
+    });
+  }
+
+  memoRoundSel.addEventListener('change', function () { memoViewKey = memoRoundSel.value; renderMemo(); memoList.scrollTop = 0; });
+  document.getElementById('memo-filter').addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-filter]');
+    if (!b) return;
+    memoFilter = b.dataset.filter; renderMemo(); memoList.scrollTop = 0;
+  });
+
+  function findMemo(id) { for (var i = 0; i < memos.length; i++) if (memos[i].id === id) return memos[i]; return null; }
+
+  memoList.addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-act]');
+    if (!b) return;
+    var rec = findMemo(Number(b.dataset.id));
+    if (!rec) return;
+    var act = b.dataset.act;
+    if (act === 'mark') changeMark(rec, b.dataset.mark);
+    else if (act === 'open') recallMemo(rec);
+    else if (act === 'del') deleteMemo(rec);
+    else if (act === 'from') jumpToSource(rec);
+  });
+
+  function changeMark(rec, k) {
+    if (memoBusy || !memoReady) return;
+    var next = rec.mark === k ? '' : k;   // 同じマークをもう一度押すと「マークなし」に戻る
+    function applied() {
+      rec.mark = next; memoBusy = false;
+      var hidden = memoFilter !== 'all' && next !== memoFilter;
+      renderMemo();
+      toast('予想' + rec.seq + ':' + (next ? MARKS[next] + (next === 'buy' ? ' 買う' : ' 迷い中') : 'マークなし') + (hidden ? '(いまの絞り込みからは外れました)' : ''));
+    }
+    memoBusy = true;
+    if (memoMemoryOnly) { applied(); return; }
+    var copy = {}; Object.keys(rec).forEach(function (key) { copy[key] = rec[key]; }); copy.mark = next;
+    dbPutMemo(copy).then(applied, function () { memoBusy = false; memoSaveFailed('マークを保存'); });
+  }
+
+  function deleteMemo(rec) {
+    if (memoBusy || !memoReady) return;
+    askConfirm('この予想を削除しますか?', targetLabel(rec.target) + ' 予想' + rec.seq + '(' + rec.numbers.join(' ') + ')を削除します。元に戻せません。', '削除する', 'danger').then(function (ok) {
+      if (!ok) return;
+      function removed() {
+        memos = memos.filter(function (m) { return m.id !== rec.id; });
+        memoBusy = false; renderMemo(); toast('予想' + rec.seq + ' を削除しました');
+      }
+      memoBusy = true;
+      if (memoMemoryOnly) { removed(); return; }
+      dbDeleteMemo(rec.id).then(removed, function () { memoBusy = false; memoSaveFailed('削除'); });
+    });
+  }
+
+  // ---- 出目表で開く:選択数字を、この予想の数字に置き換える ----
+  function recallMemo(rec) {
+    if (!ready || busy) { toast('準備中です。少し待ってからもう一度押してください。', true); return; }
+    var cur = numKeys(selected);
+    var same = cur.length === rec.numbers.length && cur.every(function (v, i) { return v === rec.numbers[i]; });
+    function apply() {
+      selected = {};
+      rec.numbers.forEach(function (v) { selected[v] = true; });
+      fromMemo = { id: rec.id, seq: rec.seq, target: rec.target };
+      render();
+      saveSelection();
+      showView('table');
+      toast(targetLabel(rec.target) + ' 予想' + rec.seq + ' を出目表に呼び出しました');
+    }
+    if (cur.length && !same) {
+      askConfirm('出目表の選択を置き換えますか?', '現在の選択(' + cur.join(' ') + ')を、予想' + rec.seq + '(' + rec.numbers.join(' ') + ')に置き換えます。保存していない選択は失われます。', '置き換える', 'primary')
+        .then(function (ok) { if (ok) apply(); });
+    } else apply();
+  }
+
+  function jumpToSource(rec) {   // 「元:予想N」→ 元の予想を表示(別の回なら回も切り替える)
+    var src = findMemo(rec.fromId);
+    if (!src) { toast('元の予想(予想' + rec.fromSeq + ')は削除されています', true); return; }
+    memoViewKey = src.target; memoFilter = 'all'; renderMemo();
+    var card = memoList.querySelector('.memo-card[data-id="' + src.id + '"]');
+    if (card) { card.scrollIntoView({ block: 'center' }); card.classList.remove('flash'); void card.offsetWidth; card.classList.add('flash'); }
+  }
+
+  // 選択行の表示更新(render()から呼ばれる)
+  function afterRender() {
+    if (!memoAddBtn) return;   // 起動中(部品の準備前)は何もしない
+    var n = selectedCount();
+    memoAddBtn.classList.toggle('short', n < MAX_SELECT);
+    var msg = document.getElementById('selection-msg');
+    msg.textContent = '';
+    if (fromMemo && n > 0) {
+      var src = findMemo(fromMemo.id), same = src && src.numbers.join() === numKeys(selected).join();
+      var lab = (fromMemo.target !== currentTarget().key ? targetLabel(fromMemo.target) + ' ' : '') + '予想' + fromMemo.seq;
+      msg.textContent = !src ? '元:' + lab + '(削除済み)' : same ? lab + ' を呼び出し中' : lab + ' から修正中';
+    }
+  }
+
+  // 起動:予想メモの読み出し(失敗しても出目表は使える。その場合は画面上だけの予想メモになる)
+  (function initMemo() {
+    var settled = false, timer;
+    function useMemoryOnly() {
+      if (settled) return;
+      settled = true; clearTimeout(timer);
+      memoMemoryOnly = true; memoReady = true;
+      renderMemo(); afterRender();
+    }
+    timer = setTimeout(useMemoryOnly, 5000);
+    openMemoDb().then(function (d) {
+      if (settled) { d.close(); return; }
+      d.onversionchange = function () { d.close(); memoDb = null; memoMemoryOnly = true; renderMemo(); };
+      return loadMemos(d).then(function (list) {
+        if (settled) { d.close(); return; }
+        settled = true; clearTimeout(timer);
+        memoDb = d; memos = list; memoReady = true;
+        renderMemo(); afterRender();
+      });
+    }).catch(useMemoryOnly);
+  })();
+
   // ---- 起動:保存済みの抽選データ・選択数字を復元 ----
   function startUp(saved) {
     if (saved && saved.draws.length) {
@@ -598,10 +994,13 @@
       var ok = true, tmp = {};
       sel.forEach(function (v) { if (!(v >= 1 && v <= COLS && Math.floor(v) === v) || tmp[v]) ok = false; tmp[v] = true; });
       if (ok) selected = tmp;   // 壊れた保存データは無視
+      var fr = ok && saved.selected.from;
+      if (fr && typeof fr.id === 'number' && typeof fr.target === 'string') fromMemo = { id: fr.id, seq: fr.seq, target: fr.target };   // v4.0
     }
     render();
     toBottom();
     ready = true;
+    renderMemo();   // v4.0: 対象回(最新回+1)が決まったので予想メモ画面を更新
     try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(function () {}); } catch (_) {}   // 可能ならブラウザに保存の維持を依頼(失敗しても動作に影響なし)
   }
   function init() {
