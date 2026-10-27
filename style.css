@@ -17,7 +17,8 @@
   --pred-h: max(calc(62px * var(--z)), calc(7px + 48px * var(--z) + var(--tap-ext)));
   --stat-h: 40px;
   --nav-h: 44px;                      /* 画面下部の固定メニュー(出目表 / 予想メモ) */
-  --pick-h: 38px;                     /* 操作行(縮尺の対象外)。上端から離してタップしやすくする */
+  --pick-h: 38px;                     /* 選択数字エリア(縮尺の対象外・下部固定) */
+  --memo-add-h: 34px;                 /* 予想メモ追加ボタンの高さ */
 
   --fs-round: max(6px, calc(13px * var(--z)));
   --fs-date: max(6px, calc(11px * var(--z)));   /* 開催日(下段) */
@@ -60,7 +61,7 @@ body { position: fixed; inset: 0; width: 100%; }
   position: absolute;
   inset: 0;
   display: grid;
-  grid-template-rows: var(--stat-h) var(--pick-h) var(--head-h) minmax(0, 1fr) var(--pred-h) var(--nav-h);
+  grid-template-rows: var(--stat-h) var(--head-h) minmax(0, 1fr) var(--pred-h) var(--pick-h) var(--nav-h);   /* ①操作バー ②見出し+出目表 ③数字ポチリ ④選択数字 ⑥タブバー(⑤予想メモ追加は行に入れず重ねる) */
   /* 横向き時のノッチ・ホームバー対策 */
   padding: 0 env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
 }
@@ -157,32 +158,16 @@ body { position: fixed; inset: 0; width: 100%; }
   display: flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
   padding: 5px 8px 3px;
-  overflow-x: auto;
-  overflow-y: hidden;
-  scrollbar-width: none;
+  overflow: hidden;
   background: var(--paper);
   border-bottom: 1px solid var(--line);
   font-size: 12px;
   white-space: nowrap;
   position: relative;
 }
-#status-bar::-webkit-scrollbar { display: none; }
-#toolbar-hint {
-  position: sticky;
-  right: 0;
-  flex: 0 0 22px;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-left: -3px;
-  color: var(--ink);
-  font-size: 17px;
-  font-weight: 800;
-  background: linear-gradient(90deg, rgba(246,245,240,0), var(--paper) 35%);
-  pointer-events: none;
-}
+#game-label { flex: none; font-size: 14px; font-weight: 800; }   /* 将来のゲーム切り替え用の表示位置(今回は表示のみ) */
 #status-bar #latest-btn {
   width: 40px;
   min-width: 40px;
@@ -204,7 +189,7 @@ body { position: fixed; inset: 0; width: 100%; }
   padding: 3px 8px;
   overflow: hidden;
   background: var(--paper);
-  border-bottom: 1px solid var(--line);
+  border-top: 1px solid var(--line);
   white-space: nowrap;
 }
 #count-label { display: none; }
@@ -251,7 +236,7 @@ body { position: fixed; inset: 0; width: 100%; }
 }
 #selection-msg { display: none; }
 
-#clear-btn, #latest-btn, #zoom-out, #zoom-in, #color-btn, #csv-btn {
+#clear-btn, #latest-btn, #zoom-out, #zoom-in, #settings-btn {
   position: relative;
   flex: none;
   height: 30px;
@@ -265,10 +250,16 @@ body { position: fixed; inset: 0; width: 100%; }
   touch-action: manipulation;
 }
 #zoom-out, #zoom-in { min-width: 40px; padding: 0; font-size: 18px; line-height: 1; }
-#zoom-val { flex: none; min-width: 2.9em; text-align: center; font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums; }
+#settings-btn { width: 40px; min-width: 40px; padding: 0; display: flex; align-items: center; justify-content: center; }
+#settings-btn[aria-expanded="true"] { background: var(--ink); color: #fff; }
+/* 倍率の直接選択メニュー(iPhoneの入力拡大を避けるため文字は16px) */
+#zoom-select {
+  flex: none; height: 30px; min-width: 4.6em; padding: 0 4px;
+  font: inherit; font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums;
+  color: var(--ink); background: var(--paper-alt); border: 1px solid var(--ink); border-radius: 6px; touch-action: manipulation;
+}
 #clear-btn { height: 30px; min-width: 54px; padding: 0 7px; }
-#clear-btn:active:not(:disabled), #latest-btn:active, #zoom-out:active:not(:disabled), #zoom-in:active:not(:disabled), #color-btn:active, #csv-btn:active { background: var(--line); }
-#color-btn[aria-expanded="true"] { background: var(--ink); color: #fff; }
+#clear-btn:active:not(:disabled), #latest-btn:active, #zoom-out:active:not(:disabled), #zoom-in:active:not(:disabled), #settings-btn:active { background: var(--line); }
 #clear-btn:disabled, #zoom-out:disabled, #zoom-in:disabled { opacity: .35; }
 @media (prefers-reduced-motion: reduce) { #count.bump { animation: none; } }
 @media (max-width: 700px) { #count-label { display: none; } }
@@ -323,7 +314,9 @@ body { position: fixed; inset: 0; width: 100%; }
 
 /* ---- CSV読み込み ---- */
 .file-hidden { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
-#csv-info { flex: none; font-size: 11px; font-weight: 700; color: var(--ink); max-width: 7em; overflow: hidden; text-overflow: ellipsis; }
+#csv-info { flex: 1 1 auto; min-width: 0; font-size: 12px; font-weight: 700; color: var(--ink); overflow: hidden; text-overflow: ellipsis; }
+#csv-info .ci-date { margin-left: .5em; font-weight: 600; }
+@media (max-width: 440px) { #csv-info .ci-date { display: none; } }   /* 縦向きなど横幅が足りないときは開催日を省く */
 #csv-msg-body { font-size: 13px; line-height: 1.5; white-space: normal; user-select: text; -webkit-user-select: text; }
 #csv-msg-body ul { margin: 4px 0 0; padding-left: 1.2em; }
 #csv-msg.err { border-color: var(--main); border-width: 2px; }
@@ -377,22 +370,26 @@ body { position: fixed; inset: 0; width: 100%; }
 /* ================= v4.0 予想メモ ================= */
 @media (orientation: landscape) and (max-height: 520px) { :root { --nav-h: 38px; } }
 
-/* 画面下部の固定メニュー */
+/* ⑥ タブバー(最下部固定)。選択中=白背景・黒文字 / 未選択=グレー背景・薄いグレー文字 */
 #bottom-nav {
   position: relative; z-index: 50;
   display: flex; gap: 0;
-  background: var(--paper);
-  border-top: 2px solid var(--ink);
+  background: #555a61;
+  border-top: 1px solid var(--ink);
+}
+#bottom-nav::after {   /* ホームインジケータ側の安全領域もタブバーの色でつなぐ(#app の下余白に重なる。レイアウトには影響しない) */
+  content: ''; position: absolute; left: 0; right: 0; top: 100%;
+  height: env(safe-area-inset-bottom, 0px); background: #555a61;
 }
 #bottom-nav button {
   flex: 1 1 0; min-width: 0;
   font: inherit; font-size: 15px; font-weight: 800;
-  color: var(--ink); background: var(--paper);
-  border: 0; border-right: 1px solid var(--line);
+  color: #d4d6da; background: #555a61;
+  border: 0; border-right: 1px solid #7a7f87;
   touch-action: manipulation;
 }
 #bottom-nav button:last-child { border-right: 0; }
-#bottom-nav button[aria-current="page"] { background: #777b82; color: #fff; }
+#bottom-nav button[aria-current="page"] { background: #fff; color: #111; }
 #nav-count { margin-left: 6px; font-size: 12px; font-weight: 700; opacity: .85; }
 #nav-count:empty { display: none; }
 
@@ -450,10 +447,16 @@ body { position: fixed; inset: 0; width: 100%; }
 .mc-actions .mc-del { color: #a11a1a; border-color: #a11a1a; }
 .mc-actions button:active { filter: brightness(.9); }
 
-/* 選択行の「予想メモに追加」 */
+/* ⑤ 予想メモ追加ボタン:右下・数字ポチリの少し上に固定(出目表のスクロールには追従しない)。
+   位置は下の固定エリア(タブバー・選択数字・数字ポチリ)の高さから求めるので、倍率や向きが変わっても重ならない */
 #memo-add {
-  flex: none; height: 30px; padding: 0 9px; font: inherit; font-size: 12px; font-weight: 800;
-  color: var(--ink); background: var(--paper-alt); border: 1px solid var(--ink); border-radius: 6px; touch-action: manipulation;
+  position: absolute; z-index: 20;
+  right: calc(env(safe-area-inset-right, 0px) + 8px);
+  bottom: calc(var(--nav-h) + var(--pick-h) + var(--pred-h) + env(safe-area-inset-bottom, 0px) + 6px);
+  height: var(--memo-add-h); min-width: 150px; padding: 0 14px;
+  font: inherit; font-size: 14px; font-weight: 800; white-space: nowrap;
+  color: var(--ink); background: var(--paper-alt); border: 1px solid var(--ink); border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .3); touch-action: manipulation;
 }
 #memo-add.short { color: var(--ink); background: var(--paper-alt); }   /* 7個に満たないとき(押すと不足を表示) */
 #memo-add:active { filter: brightness(.9); }
@@ -476,5 +479,38 @@ body { position: fixed; inset: 0; width: 100%; }
   background: rgba(35, 38, 43, .95); color: #fff; font-size: 13px; font-weight: 700; line-height: 1.4; text-align: center; pointer-events: none;
 }
 #toast.warn { background: #a11a1a; }
+#toast { bottom: calc(var(--nav-h) + var(--pick-h) + var(--pred-h) + var(--memo-add-h) + env(safe-area-inset-bottom, 0px) + 14px); }   /* 出目表の画面:選択数字・メモ追加ボタンの上 */
+#memo-screen:not([hidden]) ~ #toast { bottom: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px) + 10px); }   /* 予想メモ画面:従来の位置 */
 #toast[hidden] { display: none; }
 #csv-msg { z-index: 70; }   /* 予想メモ画面(z=40)や下部メニューより前に出す */
+
+/* ---- 設定パネル(画面下部・タブバーの上に重ねる) ---- */
+#settings-backdrop { position: absolute; inset: 0; z-index: 34; }
+#settings-backdrop[hidden] { display: none; }
+#settings-panel {
+  position: absolute; z-index: 35;
+  left: calc(env(safe-area-inset-left, 0px) + 6px);
+  right: calc(env(safe-area-inset-right, 0px) + 6px);
+  bottom: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px) + 6px);
+  width: min(480px, calc(100% - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px) - 12px));
+  margin: 0 auto;
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 8px 10px 10px;
+  background: var(--paper); border: 1px solid var(--ink); border-radius: 10px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, .28);
+  touch-action: manipulation;
+}
+#settings-panel[hidden] { display: none; }
+#settings-panel .cp-head { margin-bottom: 0; }
+#sp-close {
+  height: 30px; padding: 0 12px; font: inherit; font-weight: 700; color: var(--ink);
+  background: var(--paper-alt); border: 1px solid var(--ink); border-radius: 6px; touch-action: manipulation;
+}
+#sp-close:active { background: var(--line); }
+.sp-item {
+  height: 44px; padding: 0 14px; text-align: left;
+  font: inherit; font-size: 15px; font-weight: 700; color: var(--ink);
+  background: var(--paper-alt); border: 1px solid var(--ink); border-radius: 8px; touch-action: manipulation;
+}
+.sp-item:active { background: var(--line); }
+.sp-item[aria-expanded="true"] { background: var(--ink); color: #fff; }

@@ -299,7 +299,8 @@
   var zi = 1;                                           // 初期 40%
   var zoomOut = document.getElementById('zoom-out');
   var zoomIn = document.getElementById('zoom-in');
-  var zoomVal = document.getElementById('zoom-val');
+  var zoomSel = document.getElementById('zoom-select');   // 倍率の直接選択メニュー(選択肢は ZOOMS から作る)
+  ZOOMS.forEach(function (pct) { var o = document.createElement('option'); o.value = String(pct); o.textContent = pct + '%'; zoomSel.appendChild(o); });
 
   function setZoom(next) {
     if (next < 0 || next >= ZOOMS.length || next === zi) return;
@@ -315,13 +316,18 @@
     h.scrollLeft = cx * ratio - h.clientWidth / 2;
     t.scrollTop = atBottom ? t.scrollHeight : cy * ratio - t.clientHeight / 2;
     scrollers[0].scrollLeft = scrollers[2].scrollLeft = h.scrollLeft;   // 上下の列位置を確実に揃える
-    zoomVal.textContent = ZOOMS[zi] + '%';
+    zoomSel.value = String(ZOOMS[zi]);
     zoomOut.disabled = zi === 0;
     zoomIn.disabled = zi === ZOOMS.length - 1;
   }
   zoomOut.addEventListener('click', function () { setZoom(zi - 1); });
   zoomIn.addEventListener('click', function () { setZoom(zi + 1); });
-  zoomVal.textContent = ZOOMS[zi] + '%';
+  zoomSel.addEventListener('change', function () {   // メニューから直接選ぶ。ボタンと同じ setZoom を通すので表示と実際の大きさは一致する
+    var i = ZOOMS.indexOf(Number(zoomSel.value));
+    if (i >= 0) setZoom(i);
+    zoomSel.value = String(ZOOMS[zi]);
+  });
+  zoomSel.value = String(ZOOMS[zi]);
   document.documentElement.style.setProperty('--z', ZOOMS[zi] / 100);
   zoomOut.disabled = zi === 0;
   zoomIn.disabled = zi === ZOOMS.length - 1;
@@ -581,7 +587,11 @@
   function showDraws(meta) {
     renderHistory(draws.slice(-SHOW_ROUNDS));
     var latest = draws[draws.length - 1];
-    csvInfo.textContent = latest.round + '回';   // 操作行では短く表示(ファイル名はタップ後のメッセージに表示)
+    csvInfo.textContent = '';   // 操作バーには最新の開催回と開催日を表示(ファイル名はタップ後のメッセージに表示)
+    var ciRound = document.createElement('span'); ciRound.className = 'ci-round'; ciRound.textContent = '第' + latest.round + '回';
+    csvInfo.appendChild(ciRound);
+    var ciDate = shortDate(latest.date);
+    if (ciDate) { var ciD = document.createElement('span'); ciD.className = 'ci-date'; ciD.textContent = ciDate; csvInfo.appendChild(ciD); }
     csvInfo.title = (meta && meta.fileName) || '';
   }
 
@@ -591,6 +601,23 @@
     loadCsvFile(f);
     csvInput.value = '';   // 同じファイルをもう一度選べるようにする
   });
+
+  // ---- 設定パネル(歯車ボタン。CSV読み込み・色指定の2項目。画面下部に重ねて表示) ----
+  // 「ロト7 CSV読み込み」(#csv-btn)は上の既存処理がそのままファイル選択を開く。「色指定」(#color-btn)も既存処理がそのまま色設定パネルを開く。
+  // ここでは設定パネルの開閉だけを行う(項目を押したら設定パネルは閉じる)。
+  var settingsPanel = document.getElementById('settings-panel');
+  var settingsBackdrop = document.getElementById('settings-backdrop');
+  var settingsBtn = document.getElementById('settings-btn');
+  function setSettings(open) {
+    settingsPanel.hidden = !open;
+    settingsBackdrop.hidden = !open;
+    settingsBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  settingsBtn.addEventListener('click', function () { setSettings(settingsPanel.hidden); });
+  document.getElementById('sp-close').addEventListener('click', function () { setSettings(false); });
+  settingsBackdrop.addEventListener('click', function () { setSettings(false); });
+  csvBtn.addEventListener('click', function () { setSettings(false); });
+  colorBtn.addEventListener('click', function () { setSettings(false); });
 
   // ======================================================================
   // v4.0 予想メモ
@@ -767,7 +794,7 @@
   memoAddBtn.addEventListener('click', addMemo);
 
   // ---- 画面の切り替え ----
-  var overlaid = ['status-bar', 'selection-bar', 'head-scroll', 'table-scroll', 'pred-scroll'];
+  var overlaid = ['status-bar', 'selection-bar', 'memo-add', 'head-scroll', 'table-scroll', 'pred-scroll'];   // memo-add は選択バーの外へ移したので個別に指定
   function showView(v) {
     view = v;
     var m = v === 'memo';
@@ -775,7 +802,7 @@
     navTable.setAttribute('aria-current', m ? 'false' : 'page');
     navMemo.setAttribute('aria-current', m ? 'page' : 'false');
     overlaid.forEach(function (id) { var e = document.getElementById(id); if ('inert' in e) e.inert = m; });
-    if (m) { setPanel(false); renderMemo(); memoList.scrollTop = 0; }
+    if (m) { setPanel(false); setSettings(false); renderMemo(); memoList.scrollTop = 0; }
   }
   navTable.addEventListener('click', function () { showView('table'); });
   navMemo.addEventListener('click', function () { showView('memo'); });

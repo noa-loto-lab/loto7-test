@@ -10,36 +10,30 @@
 </head>
 <body>
 <div id="app">
-  <!-- 操作行：縮尺・最新回・色設定・CSV -->
+  <!-- ① 操作バー(上部固定・1行):ゲーム表示 / 最新回と開催日 / 縮小・拡大 / 倍率選択 / 最新回へ戻る / 設定 -->
   <div id="status-bar">
+    <span id="game-label" data-game="loto7">ロト7</span>
+    <span id="csv-info" aria-live="polite">サンプルデータ</span>
     <button id="zoom-out" type="button" aria-label="縮小">−</button>
-    <span id="zoom-val" aria-live="polite">40%</span>
     <button id="zoom-in" type="button" aria-label="拡大">＋</button>
+    <select id="zoom-select" aria-label="表示倍率"></select>
     <button id="latest-btn" type="button" aria-label="最新回へ戻る" title="最新回へ戻る">
       <span class="latest-icon" aria-hidden="true"><span class="latest-arrow">↓</span><span class="latest-line"></span></span>
     </button>
-    <span id="csv-info" aria-live="polite">サンプル</span>
-    <button id="color-btn" type="button" aria-expanded="false" aria-controls="color-panel">色設定</button>
-    <button id="csv-btn" type="button">CSV読込</button>
-    <span id="toolbar-hint" aria-hidden="true">↔</span>
+    <button id="settings-btn" type="button" aria-label="設定" aria-expanded="false" aria-controls="settings-panel">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+    </button>
     <input id="csv-input" class="file-hidden" type="file" accept=".csv,text/csv,text/comma-separated-values,.txt" aria-label="CSVファイルを選択">
   </div>
-  <!-- 選択数字行：固定サイズの7枠＋クリア -->
-  <div id="selection-bar">
-    <span id="count-label" aria-hidden="true">選択</span>
-    <span id="count" aria-live="polite" aria-hidden="true"></span>
-    <div id="picked" aria-label="選択した数字">
-      <span class="chip-slot" data-slot="0"></span>
-      <span class="chip-slot" data-slot="1"></span>
-      <span class="chip-slot" data-slot="2"></span>
-      <span class="chip-slot" data-slot="3"></span>
-      <span class="chip-slot" data-slot="4"></span>
-      <span class="chip-slot" data-slot="5"></span>
-      <span class="chip-slot" data-slot="6"></span>
+  <!-- 設定パネル(画面下部に重ねて表示。レイアウトには影響しない) -->
+  <div id="settings-backdrop" hidden></div>
+  <div id="settings-panel" role="dialog" aria-label="設定" hidden>
+    <div class="cp-head">
+      <span class="cp-title">設定</span>
+      <button id="sp-close" type="button">閉じる</button>
     </div>
-    <button id="clear-btn" type="button" disabled>クリア</button>
-    <button id="memo-add" type="button" aria-label="選択中の7数字を予想メモに追加">予想メモに追加</button>
-    <span id="selection-msg" role="status" aria-live="polite"></span>
+    <button id="csv-btn" class="sp-item" type="button">ロト7 CSV読み込み</button>
+    <button id="color-btn" class="sp-item" type="button" aria-expanded="false" aria-controls="color-panel">色指定</button>
   </div>
   <!-- 色設定パネル(操作行の下に重ねて表示。レイアウトには影響しない) -->
   <div id="color-panel" role="dialog" aria-label="色設定" hidden>
@@ -76,9 +70,27 @@
   <div id="head-scroll" class="hscroll"><div id="head-row" class="row head"></div></div>
   <!-- B. 過去の出目表領域 v3.9-test: 縦スクロール(外側)と横スクロール(内側 #table-h)を別の要素に分離 -->
   <div id="table-scroll" class="vscroll"><div id="table-h" class="hscroll"><div id="table-rows"></div></div></div>
-  <!-- C. 次回予想欄(下部固定) -->
+  <!-- ③ 数字ポチリ(次回予想欄・下部固定) -->
   <div id="pred-scroll" class="hscroll"><div id="pred-row" class="row pred"></div></div>
-  <!-- 画面下部の固定メニュー:出目表 / 予想メモ -->
+  <!-- ⑤ 予想メモ追加ボタン(右下に固定表示。レイアウトの行には入れず、数字ポチリの少し上に重ねる) -->
+  <button id="memo-add" type="button" aria-label="選択中の7数字を予想メモに追加">予想メモに追加</button>
+  <!-- ④ 選択数字エリア(下部固定):選択中の数字(固定7枠)+クリア -->
+  <div id="selection-bar">
+    <span id="count-label" aria-hidden="true">選択</span>
+    <span id="count" aria-live="polite" aria-hidden="true"></span>
+    <div id="picked" aria-label="選択した数字">
+      <span class="chip-slot" data-slot="0"></span>
+      <span class="chip-slot" data-slot="1"></span>
+      <span class="chip-slot" data-slot="2"></span>
+      <span class="chip-slot" data-slot="3"></span>
+      <span class="chip-slot" data-slot="4"></span>
+      <span class="chip-slot" data-slot="5"></span>
+      <span class="chip-slot" data-slot="6"></span>
+    </div>
+    <button id="clear-btn" type="button" disabled>クリア</button>
+    <span id="selection-msg" role="status" aria-live="polite"></span>
+  </div>
+  <!-- ⑥ タブバー(最下部固定):出目表 / 予想メモ -->
   <nav id="bottom-nav" aria-label="画面の切り替え">
     <button id="nav-table" type="button" aria-current="page">出目表</button>
     <button id="nav-memo" type="button" aria-current="false">予想メモ<span id="nav-count"></span></button>
