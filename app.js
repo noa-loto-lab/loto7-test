@@ -82,23 +82,9 @@
     return d;
   });
 
-  // ---- 横スクロールの同期(見出し・出目表・予想欄) ----
-  var scrollers = [
-    document.getElementById('head-scroll'),
-    document.getElementById('table-h'),          // v3.9-test: 出目表の横スクロール担当(旧: table-scroll)
-    document.getElementById('pred-scroll')
-  ];
-  var owner = null, timer = null;
-  scrollers.forEach(function (src) {
-    src.addEventListener('scroll', function () {
-      if (owner && owner !== src) return;   // 同期で動かされた側のイベントは無視
-      owner = src;
-      var x = src.scrollLeft;
-      scrollers.forEach(function (o) { if (o !== src && o.scrollLeft !== x) o.scrollLeft = x; });
-      clearTimeout(timer);
-      timer = setTimeout(function () { owner = null; }, 120);
-    }, { passive: true });
-  });
+  // ---- 横スクロール ----
+  // 見出し・出目表・数字タップ欄は1つのスクロール領域(#work)の中に縦に積んでいるので、横位置は常に共通。
+  // 以前の「見出し・出目表・予想欄の横スクロール同期」は不要になったため削除した。
 
   // タッチ方向固定は一旦無効化。まず標準スクロールとタップ操作を優先する。
 
@@ -276,58 +262,45 @@
   render();
 
   // ---- 初期位置:新しい回(下側)を表示 ----
-  var tableScroll = document.getElementById('table-scroll');   // v3.9-test: 縦スクロール担当
-  var tableH = scrollers[1];                                    // v3.9-test: 横スクロール担当(#table-h)
-  function toBottom() { tableScroll.scrollTop = tableScroll.scrollHeight; }
-
-  // 「最新回へ戻る」:縦位置だけ最下段へ。横位置(scrollLeft)には触れない
-  // iOS Safariでは scrollTo({behavior:'smooth'}) が効かない/慣性スクロール中は
-  // scrollTop の代入が無視されることがあるため、慣性を止めてから scrollTop を直接代入する。
-  document.getElementById('latest-btn').addEventListener('click', function () {
-    var left = tableH.scrollLeft;
-    tableScroll.style.overflowY = 'hidden';          // 慣性スクロールを止める
-    tableScroll.scrollTop = tableScroll.scrollHeight;
-    requestAnimationFrame(function () {
-      tableScroll.style.overflowY = '';
-      tableScroll.scrollTop = tableScroll.scrollHeight;
-      if (tableH.scrollLeft !== left) tableH.scrollLeft = left;
-    });
-  });
-  // ---- 拡大・縮小(操作行は対象外) ----
+  var work = document.getElementById('work');   // 縦横スクロール担当(見出し・出目表・数字タップ欄)
+  function toBottom() { work.scrollTop = work.scrollHeight; }   // 最新回(出目表の最下段)と数字タップ欄が見える位置へ
+  // ---- 拡大・縮小(操作バーは対象外。最後に使った縮尺を localStorage に保存して次回起動時に復元) ----
   // transformは使わず、CSS変数 --z で列幅・行高・文字サイズを実寸で変える。
   var ZOOMS = [30, 40, 50, 60, 70, 80, 90, 100, 120, 140];   // %
-  var zi = 1;                                           // 初期 40%
+  var ZOOM_DEFAULT = 40;                                // 保存がない・壊れているときの初期値(%)
+  var ZOOM_KEY = 'loto7.zoom';                          // 縮尺だけを保存するキー(表示回数とは別)
+  function loadZoomIndex() {
+    try {
+      var raw = window.localStorage.getItem(ZOOM_KEY);
+      if (raw !== null) { var i = ZOOMS.indexOf(Number(raw)); if (i >= 0) return i; }
+    } catch (e) { /* 読めなければ初期値 */ }
+    return ZOOMS.indexOf(ZOOM_DEFAULT);
+  }
+  function saveZoom() {
+    try { window.localStorage.setItem(ZOOM_KEY, String(ZOOMS[zi])); } catch (e) { /* 保存できなくても動作は続ける */ }
+  }
+  var zi = loadZoomIndex();
   var zoomOut = document.getElementById('zoom-out');
   var zoomIn = document.getElementById('zoom-in');
-  var zoomSel = document.getElementById('zoom-select');   // 倍率の直接選択メニュー(選択肢は ZOOMS から作る)
-  ZOOMS.forEach(function (pct) { var o = document.createElement('option'); o.value = String(pct); o.textContent = pct + '%'; zoomSel.appendChild(o); });
 
   function setZoom(next) {
     if (next < 0 || next >= ZOOMS.length || next === zi) return;
     var ratio = ZOOMS[next] / ZOOMS[zi];
-    var t = tableScroll, h = tableH;   // v3.9-test: 縦はt、横はhから読む
     // 変更前の「表示の中心」と「最新回を見ているか」を記録
-    var atBottom = t.scrollTop >= t.scrollHeight - t.clientHeight - 2;
-    var cx = h.scrollLeft + h.clientWidth / 2;
-    var cy = t.scrollTop + t.clientHeight / 2;
+    var atBottom = work.scrollTop >= work.scrollHeight - work.clientHeight - 2;
+    var cx = work.scrollLeft + work.clientWidth / 2;
+    var cy = work.scrollTop + work.clientHeight / 2;
     zi = next;
     document.documentElement.style.setProperty('--z', ZOOMS[zi] / 100);
     // 以降の読み取りでレイアウトが再計算される。同じ場所が中心に残るようにスクロール位置を補正
-    h.scrollLeft = cx * ratio - h.clientWidth / 2;
-    t.scrollTop = atBottom ? t.scrollHeight : cy * ratio - t.clientHeight / 2;
-    scrollers[0].scrollLeft = scrollers[2].scrollLeft = h.scrollLeft;   // 上下の列位置を確実に揃える
-    zoomSel.value = String(ZOOMS[zi]);
+    work.scrollLeft = cx * ratio - work.clientWidth / 2;
+    work.scrollTop = atBottom ? work.scrollHeight : cy * ratio - work.clientHeight / 2;
     zoomOut.disabled = zi === 0;
     zoomIn.disabled = zi === ZOOMS.length - 1;
+    saveZoom();
   }
   zoomOut.addEventListener('click', function () { setZoom(zi - 1); });
   zoomIn.addEventListener('click', function () { setZoom(zi + 1); });
-  zoomSel.addEventListener('change', function () {   // メニューから直接選ぶ。ボタンと同じ setZoom を通すので表示と実際の大きさは一致する
-    var i = ZOOMS.indexOf(Number(zoomSel.value));
-    if (i >= 0) setZoom(i);
-    zoomSel.value = String(ZOOMS[zi]);
-  });
-  zoomSel.value = String(ZOOMS[zi]);
   document.documentElement.style.setProperty('--z', ZOOMS[zi] / 100);
   zoomOut.disabled = zi === 0;
   zoomIn.disabled = zi === ZOOMS.length - 1;
@@ -416,12 +389,25 @@
   applyColors();
 
   // ---- CSV読み込み(ブラウザ内だけで処理。サーバーへは送信しない) ----
-  var SHOW_ROUNDS = 40;                       // 表示する直近の回数
+  // 表示回数(出目表に出す直近の回数だけを変える。縮尺・行の高さ・数字の大きさには影響しない)。localStorage に保存して次回起動時に復元
+  var ROUNDS_OPTIONS = [5, 10, 20, 30, 50];
+  var ROUNDS_DEFAULT = 20;                    // 保存がない・壊れているときの初期値
+  var ROUNDS_KEY = 'loto7.showRounds';        // 表示回数だけを保存するキー(縮尺とは別)
+  function loadShowRounds() {
+    try {
+      var raw = window.localStorage.getItem(ROUNDS_KEY);
+      if (raw !== null && ROUNDS_OPTIONS.indexOf(Number(raw)) >= 0) return Number(raw);
+    } catch (e) { /* 読めなければ初期値 */ }
+    return ROUNDS_DEFAULT;
+  }
+  function saveShowRounds() {
+    try { window.localStorage.setItem(ROUNDS_KEY, String(SHOW_ROUNDS)); } catch (e) { /* 保存できなくても動作は続ける */ }
+  }
+  var SHOW_ROUNDS = loadShowRounds();         // 表示する直近の回数
   var MAX_CSV_BYTES = 5 * 1024 * 1024;
   var CSV_HEADER = ['開催回', '開催日', '第1数字', '第2数字', '第3数字', '第4数字', '第5数字', '第6数字', '第7数字', 'ボーナス数字1', 'ボーナス数字2'];
   var csvBtn = document.getElementById('csv-btn');
   var csvInput = document.getElementById('csv-input');
-  var csvInfo = document.getElementById('csv-info');
   var csvMsg = document.getElementById('csv-msg');
   var csvMsgTitle = document.getElementById('csv-msg-title');
   var csvMsgBody = document.getElementById('csv-msg-body');
@@ -583,17 +569,11 @@
     reader.readAsArrayBuffer(file);
   }
 
-  // 現在の抽選データ(draws)から、直近の表示回数だけを表に出す。操作行の「n回」も更新
-  function showDraws(meta) {
-    renderHistory(draws.slice(-SHOW_ROUNDS));
-    var latest = draws[draws.length - 1];
-    csvInfo.textContent = '';   // 操作バーには最新の開催回と開催日を表示(ファイル名はタップ後のメッセージに表示)
-    var ciRound = document.createElement('span'); ciRound.className = 'ci-round'; ciRound.textContent = '第' + latest.round + '回';
-    csvInfo.appendChild(ciRound);
-    var ciDate = shortDate(latest.date);
-    if (ciDate) { var ciD = document.createElement('span'); ciD.className = 'ci-date'; ciD.textContent = ciDate; csvInfo.appendChild(ciD); }
-    csvInfo.title = (meta && meta.fileName) || '';
+  // 現在の抽選データ(draws。なければ仮データ)から、直近の表示回数だけを表に出す
+  function refreshHistory() {
+    renderHistory((draws.length ? draws : sampleData).slice(-SHOW_ROUNDS));
   }
+  function showDraws(meta) { refreshHistory(); }
 
   csvBtn.addEventListener('click', function () { csvInput.click(); });
   csvInput.addEventListener('change', function () {
@@ -613,11 +593,31 @@
     settingsBackdrop.hidden = !open;
     settingsBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
   }
-  settingsBtn.addEventListener('click', function () { setSettings(settingsPanel.hidden); });
+  settingsBtn.addEventListener('click', function () { if (settingsPanel.hidden) setMemoSheet(false); setSettings(settingsPanel.hidden); });
   document.getElementById('sp-close').addEventListener('click', function () { setSettings(false); });
   settingsBackdrop.addEventListener('click', function () { setSettings(false); });
   csvBtn.addEventListener('click', function () { setSettings(false); });
   colorBtn.addEventListener('click', function () { setSettings(false); });
+
+  // 表示回数(5・10・20・30・50回)。出目表に出す履歴件数だけを変える。縮尺(--z)・行の高さ・数字の大きさ・横位置は変えない。
+  var roundBtns = Array.prototype.slice.call(document.querySelectorAll('#rounds-options button'));
+  function applyRoundsButtons() {
+    roundBtns.forEach(function (b) { b.setAttribute('aria-pressed', Number(b.dataset.n) === SHOW_ROUNDS ? 'true' : 'false'); });
+  }
+  roundBtns.forEach(function (b) {
+    b.addEventListener('click', function () {
+      var n = Number(b.dataset.n);
+      if (ROUNDS_OPTIONS.indexOf(n) < 0 || n === SHOW_ROUNDS) return;
+      SHOW_ROUNDS = n;
+      saveShowRounds();
+      applyRoundsButtons();
+      var left = work.scrollLeft;
+      refreshHistory();
+      toBottom();                 // 最新側(最下段)に合わせる
+      work.scrollLeft = left;     // 横位置は維持
+    });
+  });
+  applyRoundsButtons();
 
   // ======================================================================
   // v4.0 予想メモ
@@ -633,7 +633,7 @@
   var fromMemo = null;       // いまの選択の呼び出し元 {id, seq, target}
   var memoFilter = 'all';    // all | buy | maybe
   var memoViewKey = null;    // 予想メモ画面で表示中の対象回(null=作成中の回)
-  var view = 'table';        // table | memo
+  var memoOpen = false;      // 予想メモ(ボトムシート)が開いているか
 
   var memoScreen = document.getElementById('memo-screen');
   var memoList = document.getElementById('memo-list');
@@ -641,9 +641,6 @@
   var memoTargetEl = document.getElementById('memo-target');
   var memoWarnEl = document.getElementById('memo-warn');
   var memoAddBtn = document.getElementById('memo-add');
-  var navTable = document.getElementById('nav-table');
-  var navMemo = document.getElementById('nav-memo');
-  var navCount = document.getElementById('nav-count');
   var toastEl = document.getElementById('toast');
   var toastTimer = null;
 
@@ -777,7 +774,7 @@
     function done(r) {
       memos.push(r);
       memoBusy = false;
-      if (view === 'memo' && memoViewKey !== r.target) memoViewKey = r.target;
+      if (memoOpen && memoViewKey !== r.target) memoViewKey = r.target;
       renderMemo();
       toast(targetLabel(r.target) + ' 予想' + r.seq + ' に保存しました' + (memoMemoryOnly ? '(この端末では閉じると消えます)' : ''));
     }
@@ -793,19 +790,61 @@
   }
   memoAddBtn.addEventListener('click', addMemo);
 
-  // ---- 画面の切り替え ----
-  var overlaid = ['status-bar', 'selection-bar', 'memo-add', 'head-scroll', 'table-scroll', 'pred-scroll'];   // memo-add は選択バーの外へ移したので個別に指定
-  function showView(v) {
-    view = v;
-    var m = v === 'memo';
-    memoScreen.hidden = !m;
-    navTable.setAttribute('aria-current', m ? 'false' : 'page');
-    navMemo.setAttribute('aria-current', m ? 'page' : 'false');
-    overlaid.forEach(function (id) { var e = document.getElementById(id); if ('inert' in e) e.inert = m; });
-    if (m) { setPanel(false); setSettings(false); renderMemo(); memoList.scrollTop = 0; }
+  // ---- 予想メモ(ボトムシート)の開閉 ----
+  // 画面の下半分に重ねて表示する。上部の操作バー・選択数字エリアは隠れず、出目表のスクロール位置・縮尺・選択もそのまま保たれる。
+  var memoOpenBtn = document.getElementById('memo-open');
+  var memoTop = document.getElementById('memo-top');
+  var sheetTimer = null;
+  function setMemoSheet(open, keepInline) {
+    if (open === memoOpen) return;
+    memoOpen = open;
+    clearTimeout(sheetTimer);
+    memoOpenBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    memoScreen.classList.remove('dragging');
+    if (open) {
+      setPanel(false); setSettings(false);
+      memoScreen.style.transform = '';
+      memoScreen.hidden = false;
+      renderMemo(); memoList.scrollTop = 0;
+      void memoScreen.offsetHeight;          // 表示してから動かす(アニメーションの開始位置を確定)
+      memoScreen.classList.add('open');
+    } else {
+      if (!keepInline) memoScreen.style.transform = '';
+      memoScreen.classList.remove('open');
+      sheetTimer = setTimeout(function () { memoScreen.hidden = true; memoScreen.style.transform = ''; }, 230);
+    }
   }
-  navTable.addEventListener('click', function () { showView('table'); });
-  navMemo.addEventListener('click', function () { showView('memo'); });
+  memoOpenBtn.addEventListener('click', function () { setMemoSheet(!memoOpen); });
+  document.getElementById('memo-close').addEventListener('click', function () { setMemoSheet(false); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && memoOpen) setMemoSheet(false); });
+
+  // 下スワイプで閉じる。反応するのはシート上部(つまみ+見出し)だけで、一覧のスクロールとは干渉しない
+  var sheetDrag = null;
+  memoTop.addEventListener('pointerdown', function (e) {
+    if (!memoOpen || e.target.closest('button')) return;
+    sheetDrag = { id: e.pointerId, y0: e.clientY, t0: Date.now(), dy: 0 };
+    try { memoTop.setPointerCapture(e.pointerId); } catch (_) {}
+    memoScreen.classList.add('dragging');
+  });
+  memoTop.addEventListener('pointermove', function (e) {
+    if (!sheetDrag || e.pointerId !== sheetDrag.id) return;
+    sheetDrag.dy = Math.max(0, e.clientY - sheetDrag.y0);
+    memoScreen.style.transform = 'translateY(' + sheetDrag.dy + 'px)';
+  });
+  function endSheetDrag(e) {
+    if (!sheetDrag || e.pointerId !== sheetDrag.id) return;
+    var d = sheetDrag; sheetDrag = null;
+    memoScreen.classList.remove('dragging');
+    var fast = d.dy > 30 && d.dy / Math.max(1, Date.now() - d.t0) > 0.5;
+    if (e.type !== 'pointercancel' && (d.dy >= 80 || fast)) {
+      memoScreen.style.transform = 'translateY(100%)';   // 指を離した位置から下へ滑り落ちる
+      setMemoSheet(false, true);
+    } else {
+      memoScreen.style.transform = '';                   // 元の位置へ戻る
+    }
+  }
+  memoTop.addEventListener('pointerup', endSheetDrag);
+  memoTop.addEventListener('pointercancel', endSheetDrag);
 
   // ---- 予想メモ画面の描画 ----
   function memoKeys() {   // 表示できる対象回:作成中の回 → 新しい回順 → サンプル
@@ -821,10 +860,8 @@
   }
   function renderMemo() {
     var cur = currentTarget().key;
-    var inCur = memos.filter(function (m) { return m.target === cur; }).length;
-    navCount.textContent = inCur ? String(inCur) : '';
     memoWarnEl.hidden = !memoMemoryOnly;
-    if (!memoScreen || memoScreen.hidden) return;   // 画面を開いたときに描画する(navCountだけは常に更新)
+    if (!memoOpen) return;   // シートを開いたときに描画する
 
     var keys = memoKeys();
     if (!memoViewKey || keys.indexOf(memoViewKey) === -1) memoViewKey = cur;
@@ -955,7 +992,7 @@
       fromMemo = { id: rec.id, seq: rec.seq, target: rec.target };
       render();
       saveSelection();
-      showView('table');
+      setMemoSheet(false);   // 出目表を見せるためにシートを閉じる
       toast(targetLabel(rec.target) + ' 予想' + rec.seq + ' を出目表に呼び出しました');
     }
     if (cur.length && !same) {
@@ -1014,7 +1051,7 @@
       draws = saved.draws;
       showDraws(saved.meta);
     } else {
-      renderHistory(sampleData);   // 保存データなし → 仮データ(従来どおり「サンプル」表示)
+      refreshHistory();   // 保存データなし → 仮データ(従来どおり「サンプル」表示。件数は表示回数に従う)
     }
     var sel = saved && saved.selected && saved.selected.numbers;
     if (Array.isArray(sel) && sel.length <= MAX_SELECT) {
