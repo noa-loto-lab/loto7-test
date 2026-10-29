@@ -13,7 +13,7 @@
   /* 改善C: 数字マスの上下に広げるタップ領域(見た目は変えない)。縮尺が小さいほど効く(旧版比 40%で約1.5倍・50%で約1.4倍)。
      上は予想欄の上余白(7px)、下は予想欄の下余白に収める。上限6px。 */
   --tap-ext: min(calc(10px * var(--z)), 6px);
-  --stat-h: 48px;                     /* A 操作バー(縮尺の対象外・上部固定) */
+  --stat-h: 78px;                     /* タイトル行＋A 操作バー(上部固定) */
   --pick-h: 48px;                     /* B 選択数字エリア(縮尺の対象外・上部固定)。メモ系ボタン(--ctl-h)が収まるよう操作バーと同じ高さ */
   --ctl-h: 44px;                      /* 操作ボタンの高さ(−・＋・メモを開く・メモに追加で共通) */
   --chip: 22px;                       /* 選択数字の枠(固定7枠) */
@@ -59,7 +59,7 @@ body { position: fixed; inset: 0; width: 100%; }
   position: absolute;
   inset: 0;
   display: grid;
-  grid-template-rows: var(--stat-h) var(--pick-h) minmax(0, 1fr);   /* A 操作バー / B 選択数字 / C 出目表+数字タップ欄 */
+  grid-template-rows: 30px calc(var(--stat-h) - 30px) var(--pick-h) minmax(0, 1fr);   /* タイトル / A 操作バー / B 選択数字 / C 出目表+数字タップ欄 */
   /* 横向き時のノッチ・ホームバー対策 */
   padding: 0 env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
 }
@@ -156,7 +156,23 @@ body { position: fixed; inset: 0; width: 100%; }
   box-shadow: inset 0 0 0 max(1px, calc(2px * var(--z))) var(--sel-ink);   /* 色だけに頼らず、枠でも区別 */
 }
 
-/* ---- A 操作バー(アイコンのみ) ---- */
+/* ---- アプリタイトル(控えめ) ---- */
+#app-title {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  padding: 3px 10px 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: .02em;
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+/* ---- A. 操作バー(アイコンのみ) ---- */
 #status-bar {
   display: flex;
   align-items: center;
