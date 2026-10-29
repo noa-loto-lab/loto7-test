@@ -192,7 +192,6 @@
   // ---- 数字選択(第2段階) ----
   var MAX_SELECT = 7;
   var selected = {};          // { 数字: true }
-  var countEl = document.getElementById('count');
   var clearBtn = document.getElementById('clear-btn');
   var pickedEl = document.getElementById('picked');
 
@@ -200,8 +199,6 @@
 
   function render() {
     var n = selectedCount();
-    countEl.textContent = n + ' / ' + MAX_SELECT;
-    countEl.classList.toggle('full', n === MAX_SELECT);
     clearBtn.disabled = n === 0;
     var values = Object.keys(selected).map(Number).sort(function (a, b) { return a - b; });
     Array.prototype.forEach.call(pickedEl.querySelectorAll('.chip-slot'), function (slot, i) {
@@ -235,9 +232,6 @@
       selected[n] = true;
     } else {
       // 8個目は追加せず、画面メッセージを表示。振動API対応端末では短く振動する。
-      countEl.classList.remove('bump');
-      void countEl.offsetWidth;
-      countEl.classList.add('bump');
       // 選択済みの7枠だけを短く揺らす。選択欄にはメッセージを表示しない。
       pickedEl.classList.remove('limit-shake');
       void pickedEl.offsetWidth;
@@ -891,7 +885,7 @@
       var empty = document.createElement('div');
       empty.className = 'memo-empty';
       empty.textContent = !all.length
-        ? (memoViewKey === cur ? 'まだ予想がありません。出目表で7個の数字を選び、「予想メモに追加」を押してください。' : 'この回の予想はありません。')
+        ? (memoViewKey === cur ? 'まだ予想がありません。出目表で7個の数字を選び、「メモに追加」を押してください。' : 'この回の予想はありません。')
         : 'この条件の予想はありません。';
       memoList.appendChild(empty);
       return;

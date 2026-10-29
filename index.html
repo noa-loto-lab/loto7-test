@@ -10,17 +10,15 @@
 </head>
 <body>
 <div id="app">
-  <!-- A. 操作バー(上部固定・アイコンのみ):ロト7表示 / 縮小・拡大 / 設定 / 予想メモ -->
+  <!-- A. 操作バー(上部固定):ロト7表示 / 縮小・拡大 / (右寄せ)メモを開く / 設定(歯車) -->
   <div id="status-bar">
     <span id="game-label" data-game="loto7" role="img" aria-label="ロト7">7</span>
     <button id="zoom-out" class="icon-btn" type="button" aria-label="縮小">−</button>
     <button id="zoom-in" class="icon-btn" type="button" aria-label="拡大">＋</button>
     <span class="bar-spacer"></span>
-    <button id="settings-btn" class="icon-btn" type="button" aria-label="設定" aria-expanded="false" aria-controls="settings-panel">
+    <button id="memo-open" class="memo-btn" type="button" aria-expanded="false" aria-controls="memo-screen">メモを開く</button>
+    <button id="settings-btn" class="icon-btn icon-bare" type="button" aria-label="設定" aria-expanded="false" aria-controls="settings-panel">
       <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-    </button>
-    <button id="memo-open" class="icon-btn" type="button" aria-label="予想メモ" aria-expanded="false" aria-controls="memo-screen">
-      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><path d="M14 3v6h6"></path><path d="M8 13h8"></path><path d="M8 17h5"></path></svg>
     </button>
     <input id="csv-input" class="file-hidden" type="file" accept=".csv,text/csv,text/comma-separated-values,.txt" aria-label="CSVファイルを選択">
   </div>
@@ -75,7 +73,7 @@
     </div>
     <div id="csv-msg-body"></div>
   </div>
-  <!-- B. 選択数字エリア(操作バーの直下・固定):選択中の数字(固定7枠)/ 個数 / 予想メモに追加 / クリア -->
+  <!-- B. 選択数字エリア(操作バーの直下・固定):選択中の数字(固定7枠。左に1枠分の余白)/ メモに追加 / クリア -->
   <div id="selection-bar">
     <div id="picked" aria-label="選択した数字">
       <span class="chip-slot" data-slot="0"></span>
@@ -86,11 +84,8 @@
       <span class="chip-slot" data-slot="5"></span>
       <span class="chip-slot" data-slot="6"></span>
     </div>
-    <div id="count-box">
-      <span id="count" aria-live="polite"></span>
-      <span id="selection-msg" role="status" aria-live="polite"></span>
-    </div>
-    <button id="memo-add" type="button" aria-label="選択中の7数字を予想メモに追加">＋メモ</button>
+    <span id="selection-msg" role="status" aria-live="polite"></span>
+    <button id="memo-add" type="button" aria-label="選択中の7数字を予想メモに追加">メモに追加</button>
     <button id="clear-btn" type="button" aria-label="選択をすべて解除" disabled>
       <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"></path><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"></path><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path></svg>
     </button>
