@@ -473,3 +473,7 @@ body { position: fixed; inset: 0; width: 100%; }
 .sp-info-row { display: flex; gap: 8px; }
 .sp-info-k { flex: 0 0 5.5em; font-weight: 800; }
 .sp-info-v { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+
+/* 予想メモ: 開いている回をまとめて削除 */
+#memo-del-all { height: 32px; padding: 0 10px; font: inherit; font-size: 12px; font-weight: 700; color: #a11a1a; background: var(--paper-alt); border: 1px solid #a11a1a; border-radius: 16px; touch-action: manipulation; }
+#memo-del-all:disabled { opacity: .4; }

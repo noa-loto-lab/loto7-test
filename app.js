@@ -534,15 +534,31 @@
     render();
     toBottom();      // 最新回(最下段)が見える位置へ
     var shown = Math.min(SHOW_ROUNDS, list.length);
-    showMsg(false, title, headLines.concat([
+    var lines = headLines.concat([
       list.length + '回分(第' + list[0].round + '〜' + latest.round + '回)',
       '最新:第' + latest.round + '回(' + latest.date + ')。直近' + shown + '回を表示しています。',
       '選択数字をリセットしました。次回の予想を始められます。',
       '予想メモの対象を第' + (latest.round + 1) + '回に切り替えました(過去回の予想メモは残っています)。'
-    ]).concat(extra));
+    ]);
     memoViewKey = null;   // v4.0: 予想メモ画面は新しい対象回を表示
     renderMemo();
     renderDataInfo();
+    // 抽選データの保存が済んだ後で、サンプル用メモ(抽選データ未読込のときに作られた予想)が残っていれば削除する
+    var sampleN = memoReady ? memos.filter(isSampleMemo).length : 0;
+    if (!sampleN) { showMsg(false, title, lines.concat(extra)); return; }
+    cleanupSampleMemos(sampleN).then(function (r) { showMsg(false, title, lines.concat(r).concat(extra)); });
+  }
+
+  // サンプル用メモの削除(失敗しても抽選データはそのまま。再読み込みで再試行できる)。解決値=メッセージ行の配列
+  function cleanupSampleMemos(n) {
+    var retry = ['※サンプル用の予想メモ' + n + '口は削除できませんでした。抽選データは読み込み済みです。もう一度読み込むと削除を再試行します(予想メモ画面から1口ずつ削除もできます)。'];
+    function ok(k) { return ['サンプル用の予想メモ' + k + '口を削除しました(実データ用の予想メモはそのままです)。']; }
+    if (memoBusy) return Promise.resolve(retry);
+    function dropFromScreen() { memos = memos.filter(function (m) { return !isSampleMemo(m); }); renderMemo(); }
+    if (memoMemoryOnly) { dropFromScreen(); delete memoLocalSeq.sample; return Promise.resolve(ok(n)); }
+    memoBusy = true;
+    return dbDeleteSampleMemos().then(function (k) { memoBusy = false; dropFromScreen(); return ok(k); },
+                                      function () { memoBusy = false; return retry; });
   }
 
   function loadCsvFile(file) {
@@ -666,10 +682,12 @@
     if (builtinLoading) return;
     if (!ready || busy) { showMsg(true, '少し待ってください', ['保存の準備中、または保存中です。数秒後にもう一度お試しください。', '以前のデータはそのままです。']); return; }
     var hasData = draws.length > 0;
-    if (hasData || selectedCount() > 0) {
+    var sampleN = memoReady ? memos.filter(isSampleMemo).length : 0;
+    if (hasData || selectedCount() > 0 || sampleN > 0) {
       builtinLoading = true;   // 確認ダイアログ表示中の二重起動を防ぐ
       var text = (hasData ? '現在の抽選データ(' + draws.length + '回分、最新第' + draws[draws.length - 1].round + '回)を内蔵データに置き換えます。' : '')
-        + '選択中の数字はリセットされます。予想メモ・色・倍率・表示回数は変わりません。';
+        + '選択中の数字はリセットされます。実データ用の予想メモ・色・倍率・表示回数は変わりません。'
+        + (sampleN ? '読み込みに成功すると、サンプル用の予想メモ' + sampleN + '口は削除されます。' : '');
       askConfirm('内蔵データで置き換えますか?', text, '置き換える', 'primary').then(function (ok) {
         builtinLoading = false;
         if (ok) runBuiltin();
@@ -940,6 +958,54 @@
       tx.onerror = tx.onabort = function () { reject(tx.error || new Error('削除失敗')); };
     });
   }
+  // サンプル用メモ(抽選データ未読込のときに作られた予想)か。内容(数字・印)では判定せず、アプリが付ける固定の識別値だけで判定する。
+  // 実データ用のメモは target が 'r'+開催回、round が整数なので、ここには当てはまらない。
+  function isSampleMemo(m) { return !!m && m.lottery === LOTTERY && m.target === 'sample' && m.round === null; }
+  // サンプル用メモと、その予想番号カウンタ(meta の 'seq:sample')を1つのトランザクションで削除。解決値=削除した口数。
+  // 'sample' でも条件に合わない記録が残る場合は、カウンタは消さない。
+  function dbDeleteSampleMemos() {
+    return new Promise(function (resolve, reject) {
+      if (!memoDb) { reject(new Error('メモDBなし')); return; }
+      var tx;
+      try { tx = memoDb.transaction(['memos', 'meta'], 'readwrite'); } catch (e) { reject(e); return; }
+      var removed = 0, other = 0;
+      tx.oncomplete = function () { resolve(removed); };
+      tx.onerror = tx.onabort = function () { reject(tx.error || new Error('削除失敗')); };
+      tx.objectStore('memos').openCursor().onsuccess = function (e) {
+        try {
+          var c = e.target.result;
+          if (c) {
+            var r = c.value;
+            if (isSampleMemo(r)) { c.delete(); removed++; }
+            else if (r && r.target === 'sample') other++;
+            c.continue();
+            return;
+          }
+          if (!other) tx.objectStore('meta').delete('seq:sample');
+        } catch (err) { try { tx.abort(); } catch (e2) { reject(err); } }   // 途中で失敗したら全体を取り消す
+      };
+    });
+  }
+  // 指定した回(target)のメモだけを1つのトランザクションで削除(途中で失敗したら全部取り消し)。
+  // 各メモはトランザクション内で target を再確認してから削除し、他の回のメモには触れない。予想番号カウンタ(meta)は変更しない。
+  function dbDeleteMemosOfTarget(key, ids) {
+    return new Promise(function (resolve, reject) {
+      if (!memoDb) { reject(new Error('メモDBなし')); return; }
+      var tx;
+      try { tx = memoDb.transaction(['memos'], 'readwrite'); } catch (e) { reject(e); return; }
+      var store = tx.objectStore('memos'), removed = 0;
+      tx.oncomplete = function () { resolve(removed); };
+      tx.onerror = tx.onabort = function () { reject(tx.error || new Error('削除失敗')); };
+      ids.forEach(function (id) {
+        store.get(id).onsuccess = function (e) {
+          try {
+            var r = e.target.result;
+            if (r && r.lottery === LOTTERY && r.target === key) { store.delete(id); removed++; }
+          } catch (err) { try { tx.abort(); } catch (e2) { reject(err); } }   // 途中で失敗したら全体を取り消す
+        };
+      });
+    });
+  }
   function memoSaveFailed(what) {
     clearTimeout(toastTimer); toastEl.hidden = true;   // 直前の「保存しました」が残って誤解されないように消す
     showMsg(true, what + 'できませんでした', ['ブラウザへの保存に失敗したため、変更しませんでした(画面の予想メモはそのままです)。', '端末の空き容量を確認して、もう一度お試しください。']);
@@ -1063,6 +1129,8 @@
     memoTargetEl.textContent = '作成中:' + targetLabel(cur);
 
     var all = memos.filter(function (m) { return m.target === memoViewKey; });
+    memoDelAllBtn.disabled = !all.length || memoViewKey === 'sample';
+    memoDelAllBtn.textContent = 'この回を全部削除' + (all.length ? '(' + all.length + '口)' : '');
     var cnt = { all: all.length, buy: 0, maybe: 0 };
     all.forEach(function (m) { if (m.mark) cnt[m.mark]++; });
     Array.prototype.forEach.call(document.querySelectorAll('#memo-filter button'), function (b) {
@@ -1166,6 +1234,30 @@
       dbDeleteMemo(rec.id).then(removed, function () { memoBusy = false; memoSaveFailed('削除'); });
     });
   }
+
+  // ---- 開いている回のメモを一括削除 ----
+  var memoDelAllBtn = document.getElementById('memo-del-all');
+  function deleteAllInView() {
+    if (memoBusy || !memoReady) return;
+    var key = memoViewKey;
+    if (!key || key === 'sample') return;   // サンプルは対象外(読み込み成功時の自動削除、または1口ずつ削除)
+    var n0 = memos.filter(function (m) { return m.lottery === LOTTERY && m.target === key; }).length;
+    if (!n0) return;
+    askConfirm(targetLabel(key) + 'の予想メモを削除しますか?', targetLabel(key) + 'の予想メモ' + n0 + '口を削除します。取り消せません。', '削除する', 'danger').then(function (ok) {
+      if (!ok || memoBusy || !memoReady) return;
+      var ids = memos.filter(function (m) { return m.lottery === LOTTERY && m.target === key; }).map(function (m) { return m.id; });
+      if (!ids.length) return;
+      function removed() {
+        var gone = {}; ids.forEach(function (id) { gone[id] = true; });
+        memos = memos.filter(function (m) { return !gone[m.id]; });
+        memoBusy = false; renderMemo(); toast(targetLabel(key) + 'の予想メモ' + ids.length + '口を削除しました');
+      }
+      memoBusy = true;
+      if (memoMemoryOnly) { removed(); return; }
+      dbDeleteMemosOfTarget(key, ids).then(removed, function () { memoBusy = false; memoSaveFailed('削除'); });
+    });
+  }
+  memoDelAllBtn.addEventListener('click', deleteAllInView);
 
   // ---- 出目表で開く:選択数字を、この予想の数字に置き換える ----
   function recallMemo(rec) {
