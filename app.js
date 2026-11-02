@@ -1,9 +1,24 @@
 (function () {
   'use strict';
 
-  var COLS = 37;       // 1〜37
-  var PICK = 7;        // 仮データ用:1回あたりの本数字の数
-  var BONUS = 2;       // 仮データ用:ボーナス数字の数
+  // ---- くじ種別ごとの設定(今回有効なのはロト7のみ) ----
+  // ロト6・ミニロトを追加するときは、ここに設定を1件足し、default-data.json の lotteries に同じキーでデータを足す。
+  //   id        : IndexedDB(draws の lottery 列・kvのキー)で使う識別子。既存の保存データと同じ値('loto7')を変えないこと
+  //   max       : 最大数字(1〜max)   mainCount / bonusCount : 本数字・ボーナス数字の個数
+  //   csvHeader : CSVの1行目(列構成。この列数・名前と完全一致が必要)
+  //   dataFile / dataKey : 内蔵データファイル名と、その中の lotteries のキー
+  // ※ 画面側(出目表の列数・選択上限 MAX_SELECT・予想メモ・ゲーム切り替えUI)はまだロト7固定。ロト6・ミニロトの画面対応は今回の対象外。
+  var LOTTERY_CONFIG = {
+    loto7: {
+      id: 'loto7', label: 'ロト7', max: 37, mainCount: 7, bonusCount: 2,
+      csvHeader: ['開催回', '開催日', '第1数字', '第2数字', '第3数字', '第4数字', '第5数字', '第6数字', '第7数字', 'ボーナス数字1', 'ボーナス数字2'],
+      dataFile: 'default-data.json', dataKey: 'loto7'
+    }
+  };
+  var CFG = LOTTERY_CONFIG.loto7;   // 現在のくじ種別(今回はロト7固定)
+  var COLS = CFG.max;               // 1〜37
+  var PICK = CFG.mainCount;         // 1回あたりの本数字の数
+  var BONUS = CFG.bonusCount;       // ボーナス数字の数
   var LAST_ROUND = 699;
   var ROUNDS = 40;     // 仮データの回数
 
@@ -71,6 +86,7 @@
     });
   }
   var sampleData = makeData();   // 保存データがないときだけ表示する仮データ(起動処理 startUp で描画)
+  var dataMeta = null;           // 現在の抽選データの読み込み元情報(保存済みのmeta。なければnull)
   var draws = [];                // 現在の抽選データ(全回分・開催回の昇順)。表示は最新40回だけ
 
   var predRow = document.getElementById('pred-row');
@@ -91,7 +107,7 @@
   // ---- ブラウザ内保存(IndexedDB) ----
   // draws: 全抽選回(キー=[くじ種別, 開催回]) / kv: メタ情報と選択数字(キー=種別付き)
   // くじ種別(LOTTERY)ごとにキーを分けているので、将来のロト6・ミニロトも別の値で並べて保存できる。
-  var LOTTERY = 'loto7';
+  var LOTTERY = CFG.id;   // 'loto7'(既存の保存データと同じ値)
   var DB_NAME = 'loto7-prediction', DB_VERSION = 1;
   var KEY_META = 'meta:' + LOTTERY, KEY_SEL = 'selected:' + LOTTERY;
   var dbHandle = null;      // 開けたDB。nullなら保存なし(memoryOnly)
@@ -165,7 +181,7 @@
         list.forEach(function (x) {
           ds.put({ lottery: LOTTERY, round: x.round, date: x.date, nums: numKeys(x.nums), bonus: numKeys(x.bonus) });
         });
-        kv.put({ key: KEY_META, fileName: meta.fileName, count: meta.count, latestRound: meta.latestRound, latestDate: meta.latestDate, savedAt: meta.savedAt });
+        kv.put({ key: KEY_META, kind: meta.kind || 'csv', fileName: meta.fileName, sourceName: meta.sourceName || null, count: meta.count, latestRound: meta.latestRound, latestDate: meta.latestDate, savedAt: meta.savedAt });   // kind/sourceName は追加項目(無い旧データはCSV扱い)
         kv.delete(KEY_SEL);
       } catch (e) { try { tx.abort(); } catch (_) {} reject(e); }
     });
@@ -190,7 +206,7 @@
   }
 
   // ---- 数字選択(第2段階) ----
-  var MAX_SELECT = 7;
+  var MAX_SELECT = CFG.mainCount;
   var selected = {};          // { 数字: true }
   var clearBtn = document.getElementById('clear-btn');
   var pickedEl = document.getElementById('picked');
@@ -399,7 +415,7 @@
   }
   var SHOW_ROUNDS = loadShowRounds();         // 表示する直近の回数
   var MAX_CSV_BYTES = 5 * 1024 * 1024;
-  var CSV_HEADER = ['開催回', '開催日', '第1数字', '第2数字', '第3数字', '第4数字', '第5数字', '第6数字', '第7数字', 'ボーナス数字1', 'ボーナス数字2'];
+  var CSV_HEADER = CFG.csvHeader;
   var csvBtn = document.getElementById('csv-btn');
   var csvInput = document.getElementById('csv-input');
   var csvMsg = document.getElementById('csv-msg');
@@ -506,6 +522,29 @@
     return { errors: errors, list: list };
   }
 
+  // 読み込み成功後の画面反映(CSV読み込みと内蔵データ読み込みで共用)。保存(persistReplace)が完了してから呼ぶこと。
+  // 抽選データの差し替え → 選択数字のリセット → 最新回へスクロール → 予想メモの対象回を最新回+1へ切替(既存の予想メモは削除しない)
+  function applyLoaded(list, meta, title, headLines, extra) {
+    var latest = list[list.length - 1];
+    draws = list;
+    dataMeta = meta;
+    showDraws(meta);
+    selected = {};   // 次の抽選回の予想を始める(保存側の選択は保存処理の中で消去済み)
+    fromMemo = null; // v4.0: 呼び出し元の表示も消す
+    render();
+    toBottom();      // 最新回(最下段)が見える位置へ
+    var shown = Math.min(SHOW_ROUNDS, list.length);
+    showMsg(false, title, headLines.concat([
+      list.length + '回分(第' + list[0].round + '〜' + latest.round + '回)',
+      '最新:第' + latest.round + '回(' + latest.date + ')。直近' + shown + '回を表示しています。',
+      '選択数字をリセットしました。次回の予想を始められます。',
+      '予想メモの対象を第' + (latest.round + 1) + '回に切り替えました(過去回の予想メモは残っています)。'
+    ]).concat(extra));
+    memoViewKey = null;   // v4.0: 予想メモ画面は新しい対象回を表示
+    renderMemo();
+    renderDataInfo();
+  }
+
   function loadCsvFile(file) {
     if (!file) return;
     if (!ready || busy) { showMsg(true, '少し待ってください', ['保存の準備中、または保存中です。数秒後にもう一度お試しください。', '以前のデータはそのままです。']); return; }
@@ -527,30 +566,13 @@
       // 保存できたときだけ画面の抽選データを切り替え、選択数字をリセットする。失敗したら以前の抽選データ・選択数字を維持する
       var list = result.list.sort(function (a, b) { return a.round - b.round; });
       var latest = list[list.length - 1];
-      var meta = { fileName: file.name, count: list.length, latestRound: latest.round, latestDate: latest.date, savedAt: Date.now() };
-      function applyNew(extra) {
-        draws = list;
-        showDraws(meta);
-        selected = {};   // 次の抽選回の予想を始める(保存側の選択は保存処理の中で消去済み)
-        fromMemo = null; // v4.0: 呼び出し元の表示も消す
-        render();
-        toBottom();      // 最新回(最下段)が見える位置へ
-        var shown = Math.min(SHOW_ROUNDS, list.length);
-        showMsg(false, '読み込みました', [
-          'ファイル:' + file.name,
-          list.length + '回分(第' + list[0].round + '〜' + latest.round + '回)',
-          '最新:第' + latest.round + '回(' + latest.date + ')。直近' + shown + '回を表示しています。',
-          '選択数字をリセットしました。次回の予想を始められます。',
-          '予想メモの対象を第' + (latest.round + 1) + '回に切り替えました(過去回の予想メモは残っています)。'
-        ].concat(extra));
-        memoViewKey = null;   // v4.0: 予想メモ画面は新しい対象回を表示
-        renderMemo();
-      }
-      if (memoryOnly) { applyNew(['※この端末では保存できません。画面を閉じると消えます。']); return; }
+      var meta = { kind: 'csv', fileName: file.name, count: list.length, latestRound: latest.round, latestDate: latest.date, savedAt: Date.now() };
+      var head = ['ファイル:' + file.name];
+      if (memoryOnly) { applyLoaded(list, meta, '読み込みました', head, ['※この端末では保存できません。画面を閉じると消えます。']); return; }
       busy = true;
       persistReplace(list, meta).then(function () {
         busy = false;
-        applyNew([]);
+        applyLoaded(list, meta, '読み込みました', head, []);
       }, function () {
         busy = false;
         showMsg(true, '保存できませんでした', [
@@ -575,6 +597,176 @@
     loadCsvFile(f);
     csvInput.value = '';   // 同じファイルをもう一度選べるようにする
   });
+
+  // ======================================================================
+  // 内蔵データ読み込み(default-data.json)
+  //  - ユーザーが「内蔵データを読み込む」を押したときだけ動く(自動読み込みはしない)
+  //  - 流れ: 置き換え確認 → fetch → JSON解析 → 検証 → 保存(persistReplace=CSVと同じ全件置換トランザクション) → 画面反映
+  //  - どこで失敗しても、既存の抽選データ・選択数字・予想メモはそのまま(画面反映は保存完了後だけ)
+  //  - 予想メモDB・色・倍率・表示回数には触れない
+  // ======================================================================
+  var BUILTIN_TIMEOUT_MS = 15000;
+  var MAX_BUILTIN_CHARS = 5 * 1024 * 1024;
+  var builtinBtn = document.getElementById('builtin-btn');
+  var builtinLoading = false;   // 確認中・取得中・保存中は再度受け付けない
+
+  function isInt(v) { return typeof v === 'number' && Math.floor(v) === v; }
+
+  // 内蔵データの検証(CSVの検証と同じ基準:範囲・個数・重複)。戻り値 { errors, list, source }
+  function validateBuiltin(json) {
+    var errors = [], list = [];
+    function err(m) { errors.push(m); }
+    function bail(m) { return { errors: [m], list: [], source: '' }; }
+    if (!json || typeof json !== 'object' || Array.isArray(json)) return bail('内蔵データの形式が正しくありません。');
+    if (json.schemaVersion !== 1) return bail('内蔵データの形式バージョン(schemaVersion)が想定と違います。');
+    if (!json.lotteries || typeof json.lotteries !== 'object') return bail('内蔵データに lotteries がありません。');
+    var e = json.lotteries[CFG.dataKey];
+    if (!e || typeof e !== 'object') return bail('内蔵データに' + CFG.label + '(' + CFG.dataKey + ')のデータがありません。');
+    if (typeof e.source !== 'string' || !e.source) return bail('内蔵データの元ファイル名(source)がありません。');
+    if (!Array.isArray(e.draws) || !e.draws.length) return bail('内蔵データに抽選履歴がありません。');
+    var seen = {};
+    function numsOk(a, n) {
+      if (!Array.isArray(a) || a.length !== n) return false;
+      for (var i = 0; i < a.length; i++) if (!isInt(a[i]) || a[i] < 1 || a[i] > COLS) return false;
+      return true;
+    }
+    e.draws.forEach(function (d, i) {
+      var at = (i + 1) + '件目:';
+      if (!d || typeof d !== 'object') { err(at + '形式が正しくありません。'); return; }
+      if (!isInt(d.round) || d.round < 1) { err(at + '開催回「' + d.round + '」が正しくありません。'); return; }
+      if (seen[d.round]) { err(at + '開催回' + d.round + 'が重複しています。'); return; }
+      seen[d.round] = true;
+      var bad = false;
+      var date = typeof d.date === 'string' ? parseDate(d.date) : null;
+      if (!date) { err(at + '第' + d.round + '回の開催日「' + d.date + '」を読み取れません。'); bad = true; }
+      var nums = {}, bonus = {};
+      if (!numsOk(d.main, PICK)) { err(at + '第' + d.round + '回の本数字が正しくありません(1〜' + COLS + 'の整数を' + PICK + '個)。'); bad = true; }
+      else {
+        d.main.forEach(function (v) { nums[v] = true; });
+        if (Object.keys(nums).length !== PICK) { err(at + '第' + d.round + '回の本数字に重複があります。'); bad = true; }
+      }
+      if (!numsOk(d.bonus, BONUS)) { err(at + '第' + d.round + '回のボーナス数字が正しくありません(1〜' + COLS + 'の整数を' + BONUS + '個)。'); bad = true; }
+      else {
+        d.bonus.forEach(function (v) { bonus[v] = true; });
+        var overlap = Object.keys(bonus).length !== BONUS || d.bonus.some(function (v) { return nums[v]; });
+        if (overlap) { err(at + '第' + d.round + '回のボーナス数字が、本数字または他のボーナス数字と重複しています。'); bad = true; }
+      }
+      if (!bad) list.push({ round: d.round, date: date, nums: nums, bonus: bonus });
+    });
+    if (errors.length) return { errors: errors, list: [], source: e.source };
+    list.sort(function (a, b) { return a.round - b.round; });
+    var latest = list[list.length - 1];
+    if (e.count !== list.length) err('収録回数(count=' + e.count + ')と実際の件数(' + list.length + ')が一致しません。');
+    if (e.latestRound !== latest.round) err('最新回(latestRound=' + e.latestRound + ')と実際の最新回(' + latest.round + ')が一致しません。');
+    if (typeof e.latestDate !== 'string' || parseDate(e.latestDate) !== latest.date) err('最新開催日(latestDate)が実際の最新回の開催日と一致しません。');
+    return { errors: errors, list: errors.length ? [] : list, source: e.source };
+  }
+
+  function loadBuiltin() {
+    if (builtinLoading) return;
+    if (!ready || busy) { showMsg(true, '少し待ってください', ['保存の準備中、または保存中です。数秒後にもう一度お試しください。', '以前のデータはそのままです。']); return; }
+    var hasData = draws.length > 0;
+    if (hasData || selectedCount() > 0) {
+      builtinLoading = true;   // 確認ダイアログ表示中の二重起動を防ぐ
+      var text = (hasData ? '現在の抽選データ(' + draws.length + '回分、最新第' + draws[draws.length - 1].round + '回)を内蔵データに置き換えます。' : '')
+        + '選択中の数字はリセットされます。予想メモ・色・倍率・表示回数は変わりません。';
+      askConfirm('内蔵データで置き換えますか?', text, '置き換える', 'primary').then(function (ok) {
+        builtinLoading = false;
+        if (ok) runBuiltin();
+      });
+    } else {
+      runBuiltin();
+    }
+  }
+
+  function runBuiltin() {
+    if (builtinLoading) return;
+    if (!ready || busy) { showMsg(true, '少し待ってください', ['保存の準備中、または保存中です。数秒後にもう一度お試しください。', '以前のデータはそのままです。']); return; }
+    var KEPT = '既存の抽選データ・選択数字・予想メモはそのままです。';
+    var ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    var timer = setTimeout(function () { if (ctl) ctl.abort(); }, BUILTIN_TIMEOUT_MS);
+    builtinLoading = true; busy = true;   // 取得〜保存の間は数字の選択・クリア・CSV読み込みを受け付けない
+    function done() { clearTimeout(timer); busy = false; builtinLoading = false; }
+    function fail(title, lines) { done(); showMsg(true, title, lines.concat([KEPT])); }
+    function stepError(step, lines) { var x = new Error(step); x.step = step; x.lines = lines; return x; }
+
+    var req;
+    try { req = fetch(CFG.dataFile, { cache: 'no-store', signal: ctl ? ctl.signal : undefined }); }
+    catch (e0) { fail('内蔵データを取得できませんでした', ['通信またはファイルの取得に失敗しました。']); return; }
+    req.then(function (res) {
+      if (!res.ok) throw stepError('fetch', ['内蔵データファイル(' + CFG.dataFile + ')を取得できませんでした(HTTP ' + res.status + ')。']);
+      return res.text();
+    }, function () {
+      throw stepError('fetch', ['内蔵データファイル(' + CFG.dataFile + ')を取得できませんでした(通信エラーまたは時間切れ)。', '通信環境を確認して、もう一度お試しください。']);
+    }).then(function (text) {
+      if (text.length > MAX_BUILTIN_CHARS) throw stepError('parse', ['内蔵データファイルが大きすぎます(5MBまで)。']);
+      var json;
+      try { json = JSON.parse(text); } catch (e1) { throw stepError('parse', ['内蔵データファイルを読み取れませんでした(JSONの形式エラー)。']); }
+      var r = validateBuiltin(json);
+      if (r.errors.length) {
+        var lines = r.errors.slice(0, 8);
+        if (r.errors.length > 8) lines.push('ほか' + (r.errors.length - 8) + '件のエラーがあります。');
+        throw stepError('validate', lines);
+      }
+      var list = r.list, latest = list[list.length - 1];
+      var meta = { kind: 'builtin', fileName: CFG.dataFile, sourceName: r.source, count: list.length, latestRound: latest.round, latestDate: latest.date, savedAt: Date.now() };
+      var head = ['内蔵データ:' + CFG.dataFile + '(元のCSV:' + r.source + ')'];
+      if (memoryOnly) { done(); applyLoaded(list, meta, '内蔵データを読み込みました', head, ['※この端末では保存できません。画面を閉じると消えます。']); return; }
+      return persistReplace(list, meta).then(function () {
+        done();
+        applyLoaded(list, meta, '内蔵データを読み込みました', head, []);
+      }, function () {
+        throw stepError('save', ['内蔵データをブラウザに保存できなかったため、読み込みを取り消しました。', '端末の空き容量を確認して、もう一度お試しください。']);
+      });
+    }).catch(function (e) {
+      if (e && e.step === 'validate') fail('内蔵データに問題があります', e.lines);
+      else if (e && e.step) fail(e.step === 'save' ? '保存できませんでした' : '内蔵データを読み込めませんでした', e.lines);
+      else { done(); showMsg(true, '内蔵データの読み込み中にエラーが起きました', ['画面の表示が正しいか確認してください。必要なら画面を開き直してください。']); }
+    });
+  }
+
+  builtinBtn.addEventListener('click', function () { setSettings(false); loadBuiltin(); });
+
+  // ---- 設定パネルの「現在の抽選データ」表示(読み込み方法・読み込み元・収録回数・最新回) ----
+  // 収録回数と最新回は実際の抽選データ(draws)から求める。meta が無い・壊れている場合も読み込み元だけ「不明」にして表示する。
+  var dataInfoEl = document.getElementById('data-info');
+  function fmtSavedAt(t) {
+    if (!isInt(t) || t <= 0) return '';
+    var d = new Date(t);
+    if (isNaN(d.getTime())) return '';
+    function z(n) { return (n < 10 ? '0' : '') + n; }
+    return d.getFullYear() + '/' + z(d.getMonth() + 1) + '/' + z(d.getDate()) + ' ' + z(d.getHours()) + ':' + z(d.getMinutes());
+  }
+  function renderDataInfo() {
+    var rows = [];
+    if (!draws.length) {
+      rows.push(['抽選データ', '未読み込み(サンプル表示)']);
+    } else {
+      var m = (dataMeta && typeof dataMeta === 'object') ? dataMeta : null;
+      var kind = '不明', src = '記録なし';
+      if (m && m.kind === 'builtin') {
+        kind = '内蔵データ';
+        src = (typeof m.fileName === 'string' && m.fileName ? m.fileName : CFG.dataFile) + (typeof m.sourceName === 'string' && m.sourceName ? '(元のCSV:' + m.sourceName + ')' : '');
+      } else if (m && typeof m.fileName === 'string' && m.fileName) {
+        kind = 'CSV読み込み';
+        src = m.fileName;
+      }
+      var latest = draws[draws.length - 1];
+      rows.push(['読み込み方法', kind]);
+      rows.push(['読み込み元', src]);
+      rows.push(['収録回数', draws.length + '回分(第' + draws[0].round + '〜' + latest.round + '回)']);
+      rows.push(['最新回', '第' + latest.round + '回' + (latest.date ? '(' + latest.date + ')' : '')]);
+      var at = m ? fmtSavedAt(m.savedAt) : '';
+      if (at) rows.push(['読み込み日時', at]);
+    }
+    dataInfoEl.textContent = '';
+    rows.forEach(function (r) {
+      var line = document.createElement('div'); line.className = 'sp-info-row';
+      var k = document.createElement('span'); k.className = 'sp-info-k'; k.textContent = r[0];
+      var v = document.createElement('span'); v.className = 'sp-info-v'; v.textContent = r[1];
+      line.appendChild(k); line.appendChild(v); dataInfoEl.appendChild(line);
+    });
+  }
 
   // ---- 設定パネル(歯車ボタン。CSV読み込み・色指定の2項目。画面下部に重ねて表示) ----
   // 「ロト7 CSV読み込み」(#csv-btn)は上の既存処理がそのままファイル選択を開く。「色指定」(#color-btn)も既存処理がそのまま色設定パネルを開く。
@@ -1043,6 +1235,7 @@
   function startUp(saved) {
     if (saved && saved.draws.length) {
       draws = saved.draws;
+      dataMeta = saved.meta || null;
       showDraws(saved.meta);
     } else {
       refreshHistory();   // 保存データなし → 仮データ(従来どおり「サンプル」表示。件数は表示回数に従う)
@@ -1058,6 +1251,7 @@
     render();
     toBottom();
     ready = true;
+    renderDataInfo();
     renderMemo();   // v4.0: 対象回(最新回+1)が決まったので予想メモ画面を更新
     try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(function () {}); } catch (_) {}   // 可能ならブラウザに保存の維持を依頼(失敗しても動作に影響なし)
   }

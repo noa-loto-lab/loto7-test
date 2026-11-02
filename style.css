@@ -464,3 +464,12 @@ body { position: fixed; inset: 0; width: 100%; }
 }
 .sp-item:active { background: var(--line); }
 .sp-item[aria-expanded="true"] { background: var(--ink); color: #fff; }
+
+/* 設定パネル: 内蔵データ読み込みボタンと、現在の抽選データ表示 */
+.sp-item-2 { height: auto; min-height: 44px; padding: 6px 14px; display: flex; flex-direction: column; justify-content: center; gap: 1px; }
+.sp-item-2 .sp-item-main { font-size: 15px; font-weight: 700; }
+.sp-item-2 .sp-item-sub { font-size: 11px; font-weight: 500; opacity: .75; }
+.sp-info { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; font-size: 12px; line-height: 1.4; background: var(--paper-alt); border: 1px dashed var(--line); border-radius: 8px; }
+.sp-info-row { display: flex; gap: 8px; }
+.sp-info-k { flex: 0 0 5.5em; font-weight: 800; }
+.sp-info-v { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
