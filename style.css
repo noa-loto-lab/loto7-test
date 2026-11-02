@@ -477,3 +477,36 @@ body { position: fixed; inset: 0; width: 100%; }
 /* 予想メモ: 開いている回をまとめて削除 */
 #memo-del-all { height: 32px; padding: 0 10px; font: inherit; font-size: 12px; font-weight: 700; color: #a11a1a; background: var(--paper-alt); border: 1px solid #a11a1a; border-radius: 16px; touch-action: manipulation; }
 #memo-del-all:disabled { opacity: .4; }
+
+/* ================= v4.4 スマホ横向き:操作エリアを1段にする =================
+   横向き(高さ500px以下)かつ幅656px以上のときだけ適用。縦向き・iPad・幅の狭い横向きは従来の2段のまま。
+   HTMLは変更しない。#status-bar と #selection-bar を display:contents にして、中の部品を #app のグリッドへ直接並べる。
+   並び順: 縮尺(7・−・＋) | 選択数字 | メモを開く・メモに追加・削除・設定。区切りは #picked の擬似要素(薄いグレーの縦線2本)。 */
+@media (orientation: landscape) and (max-height: 500px) and (min-width: 656px) {
+  :root { --pick-h: 0px; }   /* 選択数字バーの行がなくなる(パネル・トースト・メモシートの位置はこの変数から追従) */
+  #app {
+    grid-template-columns: 36px 44px 44px minmax(0, 1fr) auto minmax(0, 1fr) auto auto 40px 44px;
+    grid-template-rows: 30px 48px minmax(0, 1fr);   /* タイトル(従来どおり残す) / 操作行 / 出目表 */
+    column-gap: 6px;
+    padding-left: calc(env(safe-area-inset-left, 0px) + 8px);
+    padding-right: calc(env(safe-area-inset-right, 0px) + 8px);
+  }
+  #app-title { grid-column: 1 / -1; grid-row: 1; }
+  #status-bar, #selection-bar { display: contents; }
+  .bar-spacer { display: none; }
+  #game-label { grid-area: 2 / 1; align-self: center; }
+  #zoom-out { grid-area: 2 / 2; align-self: center; }
+  #zoom-in { grid-area: 2 / 3; align-self: center; }
+  #picked { grid-area: 2 / 5; align-self: center; margin-left: 0; position: relative; }
+  #picked::before, #picked::after { content: ''; position: absolute; top: 50%; height: 28px; margin-top: -14px; width: 1px; background: var(--line); }
+  #picked::before { left: -6px; }
+  #picked::after { right: -6px; }
+  /* 呼び出し元の表示:選択数字と同じセル(4値指定でセル全体)を基準に、チップの真下へ(縦向きと同じ位置関係) */
+  #selection-msg { grid-area: 2 / 5 / 3 / 6; }
+  #selection-msg:not(:empty) { left: 0; bottom: 1px; max-width: 100%; }
+  #memo-open { grid-area: 2 / 7; align-self: center; }
+  #memo-add { grid-area: 2 / 8; align-self: center; margin-left: 0; }
+  #clear-btn { grid-area: 2 / 9; align-self: center; margin-left: 0; }
+  #settings-btn { grid-area: 2 / 10; align-self: center; }
+  #work { grid-column: 1 / -1; grid-row: 3; border-top: 1px solid var(--line); }
+}
