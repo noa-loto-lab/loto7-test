@@ -70,6 +70,7 @@ body { position: fixed; inset: 0; width: 100%; }
   min-width: 0;
   min-height: 0;
   overflow: auto;
+  touch-action: pan-x pan-y;   /* 1本指のスクロールだけブラウザに任せる。2本指ピンチ(ページ拡大・ダブルタップ拡大)はブラウザに処理させず、app.js のピンチ処理が受け取る */
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;

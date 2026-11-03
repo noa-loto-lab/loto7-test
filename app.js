@@ -275,7 +275,7 @@
   var work = document.getElementById('work');   // 縦横スクロール担当(見出し・出目表・数字タップ欄)
   function toBottom() { work.scrollTop = work.scrollHeight; }   // 最新回(出目表の最下段)と数字タップ欄が見える位置へ
   // ---- 拡大・縮小(操作バーは対象外。最後に使った縮尺を localStorage に保存して次回起動時に復元) ----
-  // transformは使わず、CSS変数 --z で列幅・行高・文字サイズを実寸で変える。
+  // 倍率の実体は CSS変数 --z(列幅・行高・文字サイズを実寸で変える)。transform は2本指ピンチの操作中の見た目(プレビュー)にだけ一時的に使う。
   var ZOOMS = [30, 40, 50, 60, 70, 80, 90, 100, 120, 140];   // %
   var ZOOM_DEFAULT = 40;                                // 保存がない・壊れているときの初期値(%)
   var ZOOM_KEY = 'loto7.zoom';                          // 縮尺だけを保存するキー(表示回数とは別)
@@ -294,6 +294,7 @@
   var zoomIn = document.getElementById('zoom-in');
 
   function setZoom(next) {
+    if (pinch) cleanupPinch();   // ピンチの途中・仕上げ中にボタンが押されたら、ピンチ用の一時状態を先に片付ける
     if (next < 0 || next >= ZOOMS.length || next === zi) return;
     var ratio = ZOOMS[next] / ZOOMS[zi];
     // 変更前の「表示の中心」と「最新回を見ているか」を記録
@@ -314,6 +315,170 @@
   document.documentElement.style.setProperty('--z', ZOOMS[zi] / 100);
   zoomOut.disabled = zi === 0;
   zoomIn.disabled = zi === ZOOMS.length - 1;
+
+  // ======================================================================
+  // 2本指ピンチでの縮尺変更(既存のズームボタン・保存キー loto7.zoom・10段階の倍率はそのまま)
+  //  - ピンチ中は #work-inner に transform を当てて滑らかにプレビュー(指の中間点が基点。2本指のパンも追従)
+  //  - 離したとき: 最も近い10段階の倍率へ確定(--z とスクロール位置)→ 見た目の差を約150msかけて整える(FLIP)
+  //  - 2本指の間とピンチ直後(400ms)は、数字の選択・解除(click)を遮断。1本指のタップ・スクロールは従来どおり
+  //  - ページ全体の拡大は touch-action(style.css)と gesturestart で抑止。ピンチ開始時の preventDefault は使わない
+  //  - どの終了経路(離す・中断・回転・アプリ切替・放置・ボタン操作)でも cleanupPinch で必ず元に戻す
+  // ======================================================================
+  var PINCH_GUARD_MS = 400;      // ピンチ終了後に数字の選択を受け付けない時間
+  var PINCH_SETTLE_MS = 150;     // 離したあと、見た目を整える時間
+  var PINCH_WATCHDOG_MS = 5000;  // 指が離れたイベントを取りこぼしたときの保険(指を動かさず押さえているだけでは動かない長さ)
+  var PINCH_MIN_D0 = 24;         // 開始時の指の間隔の下限(px。近すぎると倍率が暴れる)
+  var workInner = document.getElementById('work-inner');
+  var pinch = null;              // 進行中のピンチ { phase: 'active' | 'settling', ... }
+  var multiTouchSeq = false;     // 今のタッチ列で2本指になった(すべての指が離れるまで true)
+  var lastMultiEnd = -1e9;       // 複数指のタッチ列が最後に終わった時刻
+  var pinchSettleTimer = null, pinchWatchdog = null;
+
+  function pnow() { return (window.performance && performance.now) ? performance.now() : Date.now(); }
+  function tDist(a, b) { var dx = a.clientX - b.clientX, dy = a.clientY - b.clientY; return Math.sqrt(dx * dx + dy * dy); }
+  function tMid(a, b) { return { x: (a.clientX + b.clientX) / 2, y: (a.clientY + b.clientY) / 2 }; }
+  function touchById(list, id) { for (var i = 0; i < list.length; i++) if (list[i].identifier === id) return list[i]; return null; }
+  function updateZoomButtons() { zoomOut.disabled = zi === 0; zoomIn.disabled = zi === ZOOMS.length - 1; }
+
+  // ピンチ用の一時状態をすべて元に戻す(何度呼んでも同じ結果。#work / #work-inner にはこれ以外にインラインスタイルを使っていない)
+  function cleanupPinch() {
+    clearTimeout(pinchSettleTimer); pinchSettleTimer = null;
+    clearTimeout(pinchWatchdog); pinchWatchdog = null;
+    work.style.removeProperty('overflow');
+    workInner.style.removeProperty('transform');
+    workInner.style.removeProperty('transform-origin');
+    workInner.style.removeProperty('transition');
+    workInner.style.removeProperty('will-change');
+    pinch = null;
+  }
+  // 中断(touchcancel・回転・アプリ切替・放置など): 倍率は変えず、スクロール位置も元のまま
+  function cancelPinch() {
+    if (!pinch) return;
+    if (pinch.phase === 'active') { var p = pinch; cleanupPinch(); work.scrollLeft = p.sl0; work.scrollTop = p.st0; }
+    else cleanupPinch();
+  }
+  function armPinchWatchdog() {
+    clearTimeout(pinchWatchdog);
+    pinchWatchdog = setTimeout(function () {
+      if (pinch && pinch.phase === 'active') { cancelPinch(); multiTouchSeq = false; lastMultiEnd = pnow(); }
+    }, PINCH_WATCHDOG_MS);
+  }
+
+  function startPinch(e) {
+    if (pinch && pinch.phase === 'settling') cleanupPinch();   // 仕上げ中に次のピンチ: 前の結果はすでに確定済みなので一時状態だけ片付ける
+    if (pinch) return;                                         // 3本目以降は無視
+    var ts = [];
+    for (var i = 0; i < e.touches.length; i++) if (work.contains(e.touches[i].target)) ts.push(e.touches[i]);
+    if (ts.length < 2) return;
+    var r = work.getBoundingClientRect();
+    var L = r.left + work.clientLeft, T = r.top + work.clientTop;   // コンテンツ座標の原点(②の上罫線1pxも考慮)
+    var F0 = tMid(ts[0], ts[1]);
+    pinch = {
+      phase: 'active', id0: ts[0].identifier, id1: ts[1].identifier,
+      L: L, T: T, F0: F0, F: F0, d0: Math.max(PINCH_MIN_D0, tDist(ts[0], ts[1])), s: 1,
+      sl0: work.scrollLeft, st0: work.scrollTop, z0: ZOOMS[zi],
+      O: { x: work.scrollLeft + F0.x - L, y: work.scrollTop + F0.y - T }   // 焦点のコンテンツ座標(拡大縮小の基点)
+    };
+    work.style.overflow = 'hidden';   // 1本指ですでにスクロール中だった場合に備え、ピンチ中はスクロールを止める
+    workInner.style.transition = 'none';
+    workInner.style.transformOrigin = pinch.O.x + 'px ' + pinch.O.y + 'px';
+    workInner.style.willChange = 'transform';
+    armPinchWatchdog();
+  }
+
+  function movePinch(e) {
+    var p = pinch;
+    var a = touchById(e.touches, p.id0), b = touchById(e.touches, p.id1);
+    if (!a || !b) return;
+    var sMin = ZOOMS[0] / p.z0, sMax = ZOOMS[ZOOMS.length - 1] / p.z0;
+    var s = Math.max(sMin, Math.min(sMax, tDist(a, b) / p.d0));
+    var F = tMid(a, b);
+    p.s = s; p.F = F;
+    // 基点 O が常に現在の指の中間点 F に表示される: translate(F-F0) scale(s)(基点 O)
+    workInner.style.transform = 'translate(' + (F.x - p.F0.x) + 'px,' + (F.y - p.F0.y) + 'px) scale(' + s + ')';
+    armPinchWatchdog();
+  }
+
+  // 指を離した: 最も近い倍率へ確定し、確定直前のプレビューと同じ見た目から約150msで本来の位置へ整える(FLIP)
+  function commitPinch() {
+    var p = pinch;
+    if (!p || p.phase !== 'active') return;
+    clearTimeout(pinchWatchdog); pinchWatchdog = null;
+    var zLive = p.z0 * p.s, best = 0;
+    for (var i = 1; i < ZOOMS.length; i++) if (Math.abs(ZOOMS[i] - zLive) < Math.abs(ZOOMS[best] - zLive)) best = i;
+    var r = ZOOMS[best] / p.z0, F = p.F, changed = best !== zi;
+    if (changed) { zi = best; document.documentElement.style.setProperty('--z', ZOOMS[zi] / 100); }
+    work.style.removeProperty('overflow');
+    // プレビューの transform を外してからレイアウトを確定する(transform が残っているとスクロール可能範囲の計算がずれる)
+    workInner.style.transition = 'none';
+    workInner.style.transform = 'none';
+    workInner.style.transformOrigin = '0 0';
+    void work.scrollWidth;   // レイアウトを確定してからスクロール位置を設定(範囲外はブラウザが範囲内に収める)
+    work.scrollLeft = r * p.O.x - (F.x - p.L);
+    work.scrollTop = r * p.O.y - (F.y - p.T);
+    var sl1 = work.scrollLeft, st1 = work.scrollTop;   // 実際に設定された値
+    updateZoomButtons();
+    if (changed) saveZoom();
+    // 確定後のレイアウトの上に「確定直前と同じ見た目」になる逆変換を当て、そこから恒等変換へ戻す
+    var k = p.s / r;
+    var ex = sl1 - p.sl0 + (1 - p.s) * p.O.x + (F.x - p.F0.x);
+    var ey = st1 - p.st0 + (1 - p.s) * p.O.y + (F.y - p.F0.y);
+    workInner.style.transition = 'none';
+    workInner.style.transformOrigin = '0 0';
+    workInner.style.transform = 'translate(' + ex + 'px,' + ey + 'px) scale(' + k + ')';
+    void workInner.offsetWidth;
+    workInner.style.transition = 'transform ' + PINCH_SETTLE_MS + 'ms ease-out';
+    workInner.style.transform = 'translate(0px,0px) scale(1)';
+    p.phase = 'settling';
+    clearTimeout(pinchSettleTimer);
+    pinchSettleTimer = setTimeout(cleanupPinch, PINCH_SETTLE_MS + 70);
+  }
+
+  work.addEventListener('touchstart', function (e) {
+    if (e.touches.length === 1) {   // 新しい1本指のタッチ列(以前の列は終わっている)
+      multiTouchSeq = false;
+      if (pinch && pinch.phase === 'settling') cleanupPinch();
+      return;
+    }
+    multiTouchSeq = true;           // 2本指以上: すべての指が離れるまで数字の選択を遮断
+    startPinch(e);
+  }, { passive: true });
+  work.addEventListener('touchmove', function (e) {
+    if (pinch && pinch.phase === 'active') {
+      movePinch(e);
+      if (e.cancelable) e.preventDefault();   // 2本指の間だけ、スクロール・拡大の既定動作を止める
+    } else if (multiTouchSeq && e.cancelable) {
+      e.preventDefault();                     // ピンチ後に残った指でスクロールが始まらないように(すべて離れるまで)
+    }
+  }, { passive: false });
+  function onPinchTouchEnd(e) {
+    try {
+      if (pinch && pinch.phase === 'active') {
+        if (e.type === 'touchcancel') cancelPinch();
+        else if (!touchById(e.touches, pinch.id0) || !touchById(e.touches, pinch.id1)) commitPinch();
+      }
+    } catch (err) { cleanupPinch(); }
+    if (e.touches.length === 0 && multiTouchSeq) { multiTouchSeq = false; lastMultiEnd = pnow(); }
+  }
+  work.addEventListener('touchend', onPinchTouchEnd, { passive: true });
+  work.addEventListener('touchcancel', onPinchTouchEnd, { passive: true });
+
+  // 数字の選択(#pred-row の click)に届く前に遮断: 2本指の間と、すべての指が離れてから400ms以内
+  work.addEventListener('click', function (e) {
+    if (pinch || multiTouchSeq || pnow() - lastMultiEnd < PINCH_GUARD_MS) { e.stopPropagation(); e.preventDefault(); }
+  }, true);
+
+  // 座標の基準が変わる・指のイベントが届かなくなる場合は中断して元に戻す
+  function abortPinchOnEnvChange() { if (pinch) { cancelPinch(); if (multiTouchSeq) { multiTouchSeq = false; lastMultiEnd = pnow(); } } }
+  window.addEventListener('resize', abortPinchOnEnvChange);
+  window.addEventListener('orientationchange', abortPinchOnEnvChange);
+  window.addEventListener('pagehide', abortPinchOnEnvChange);
+  window.addEventListener('blur', abortPinchOnEnvChange);
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') abortPinchOnEnvChange(); });
+  // iOS のページ全体のピンチ拡大は、出目表の上で始まったときだけ打ち消す(Safari 専用イベント。他の場所の動作は変えない)
+  function blockPageZoom(e) { if (work.contains(e.target)) e.preventDefault(); }
+  document.addEventListener('gesturestart', blockPageZoom, { passive: false });
+  document.addEventListener('gesturechange', blockPageZoom, { passive: false });
 
   // ---- 色設定(本数字・ボーナス数字の色。localStorageに保存) ----
   var DEFAULT_COLORS = { main: '#d3202c', bonus: '#f5b700' };
