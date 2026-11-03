@@ -1056,6 +1056,7 @@
     if (open) {
       setPanel(false); setSettings(false);
       memoScreen.style.transform = '';
+      setMemoLevel(1);                       // 開くたびに通常サイズ
       memoScreen.hidden = false;
       renderMemo(); memoList.scrollTop = 0;
       void memoScreen.offsetHeight;          // 表示してから動かす(アニメーションの開始位置を確定)
@@ -1070,30 +1071,78 @@
   document.getElementById('memo-close').addEventListener('click', function () { setMemoSheet(false); });
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && memoOpen) setMemoSheet(false); });
 
-  // 下スワイプで閉じる。反応するのはシート上部(つまみ+見出し)だけで、一覧のスクロールとは干渉しない
+  // ---- 予想メモ欄の高さ(3段階:1=通常 / 2=中 / 3=最大) ----
+  // 高さの実体は CSS(#memo-screen の data-level)。段階の高さ(px)はドラッグ開始時に実際の CSS から測るので、
+  // 縦横の向き・画面サイズ・横向き1段化(--pick-h)に自動で追従する。
+  var MEMO_LEVELS = 3;
+  var memoLevel = 1;
+  function setMemoLevel(n) {
+    memoLevel = n;
+    memoScreen.setAttribute('data-level', String(n));
+    memoScreen.style.height = '';
+  }
+  function measureLevels() {   // 呼び出し前に dragging クラスを付けておくこと(アニメーションなしで測るため)
+    var keep = memoScreen.getAttribute('data-level'), inl = memoScreen.style.height, hs = [0];
+    memoScreen.style.height = '';
+    for (var i = 1; i <= MEMO_LEVELS; i++) { memoScreen.setAttribute('data-level', String(i)); hs.push(memoScreen.offsetHeight); }
+    memoScreen.setAttribute('data-level', keep);
+    memoScreen.style.height = inl;
+    return hs;
+  }
+
+  // シート上部(つまみ+見出し)のドラッグ。反応するのはここだけで、一覧のスクロールとは干渉しない。
+  //  上へ引く → 一段ずつ拡大 / 下へ引く → 一段ずつ縮小 / 通常サイズからさらに下へ引く → 閉じる(従来どおり 80px以上 または 素早く)
+  //  1回のドラッグで動くのは最大一段。指に合わせて高さが連続して変わり、離すと最寄りの段階へ収まる。
   var sheetDrag = null;
   memoTop.addEventListener('pointerdown', function (e) {
     if (!memoOpen || e.target.closest('button')) return;
-    sheetDrag = { id: e.pointerId, y0: e.clientY, t0: Date.now(), dy: 0 };
+    sheetDrag = { id: e.pointerId, y0: e.clientY, t0: Date.now(), dy: 0, lv: memoLevel, hs: null, h0: 0 };
     try { memoTop.setPointerCapture(e.pointerId); } catch (_) {}
     memoScreen.classList.add('dragging');
+    sheetDrag.hs = measureLevels();
+    sheetDrag.h0 = sheetDrag.hs[sheetDrag.lv];
   });
   memoTop.addEventListener('pointermove', function (e) {
-    if (!sheetDrag || e.pointerId !== sheetDrag.id) return;
-    sheetDrag.dy = Math.max(0, e.clientY - sheetDrag.y0);
-    memoScreen.style.transform = 'translateY(' + sheetDrag.dy + 'px)';
+    var d = sheetDrag;
+    if (!d || e.pointerId !== d.id) return;
+    d.dy = e.clientY - d.y0;
+    var lo = d.lv > 1 ? d.hs[d.lv - 1] : d.hs[1];     // 一段下の高さ(通常サイズでは自分自身)
+    var hi = d.lv < MEMO_LEVELS ? d.hs[d.lv + 1] : d.hs[MEMO_LEVELS];   // 一段上の高さ
+    var h = d.h0 - d.dy;
+    if (h > hi) h = hi;
+    if (d.lv > 1 && h < lo) h = lo;
+    if (h >= lo) {
+      memoScreen.style.transform = '';
+      memoScreen.style.height = h + 'px';
+    } else {   // 通常サイズから下へ引いている間は、従来どおりシートごと下へ動かす(離すと閉じる/戻る)
+      memoScreen.style.height = '';
+      memoScreen.style.transform = 'translateY(' + (lo - h) + 'px)';
+    }
   });
   function endSheetDrag(e) {
-    if (!sheetDrag || e.pointerId !== sheetDrag.id) return;
-    var d = sheetDrag; sheetDrag = null;
+    var d = sheetDrag;
+    if (!d || e.pointerId !== d.id) return;
+    sheetDrag = null;
     memoScreen.classList.remove('dragging');
-    var fast = d.dy > 30 && d.dy / Math.max(1, Date.now() - d.t0) > 0.5;
-    if (e.type !== 'pointercancel' && (d.dy >= 80 || fast)) {
-      memoScreen.style.transform = 'translateY(100%)';   // 指を離した位置から下へ滑り落ちる
+    var cancelled = e.type === 'pointercancel';
+    var dy = d.dy, ady = Math.abs(dy);
+    var fast = ady > 30 && ady / Math.max(1, Date.now() - d.t0) > 0.5;
+    if (!cancelled && d.lv === 1 && dy > 0 && (dy >= 80 || fast)) {
+      memoScreen.style.transform = 'translateY(100%)';   // 指を離した位置から下へ滑り落ちる(通常サイズからさらに下へ → 閉じる)
       setMemoSheet(false, true);
-    } else {
-      memoScreen.style.transform = '';                   // 元の位置へ戻る
+      return;
     }
+    var target = d.lv;
+    if (!cancelled && dy < 0 && d.lv < MEMO_LEVELS) {
+      var thUp = Math.min(40, 0.35 * (d.hs[d.lv + 1] - d.hs[d.lv]));
+      if (ady >= thUp || fast) target = d.lv + 1;
+    } else if (!cancelled && dy > 0 && d.lv > 1) {
+      var thDn = Math.min(40, 0.35 * (d.hs[d.lv] - d.hs[d.lv - 1]));
+      if (ady >= thDn || fast) target = d.lv - 1;
+    }
+    memoScreen.style.transform = '';   // (通常サイズで下へ引いて閉じなかったときは元の位置へ戻る)
+    void memoScreen.offsetHeight;      // 現在のpx高さを確定してから段階を切り替える(高さがなめらかに動く)
+    setMemoLevel(target);
   }
   memoTop.addEventListener('pointerup', endSheetDrag);
   memoTop.addEventListener('pointercancel', endSheetDrag);

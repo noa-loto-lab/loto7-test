@@ -336,15 +336,21 @@ body { position: fixed; inset: 0; width: 100%; }
 #memo-screen {
   position: absolute; z-index: 40;
   left: env(safe-area-inset-left, 0px); right: env(safe-area-inset-right, 0px); bottom: 0;
-  height: min(max(50%, 200px), calc(100% - var(--stat-h) - var(--pick-h) - 44px));   /* 横向きでも出目表が2〜3行は見えるよう、最小は200px */
+  /* 高さは3段階。1=通常(従来と同じ) / 2=中(通常と最大の中間) / 3=最大(上部の操作バーは隠さない)。data-level で切り替える */
+  --mh1: min(max(50%, 200px), calc(100% - var(--stat-h) - var(--pick-h) - 44px));   /* 横向きでも出目表が2〜3行は見えるよう、最小は200px */
+  --mh3: calc(100% - var(--stat-h) - var(--pick-h));
+  --mh2: calc((var(--mh1) + var(--mh3)) / 2);
+  height: var(--mh1);
   display: flex; flex-direction: column;
   padding-bottom: env(safe-area-inset-bottom, 0px);
   background: var(--paper);
   border: 1px solid var(--ink); border-bottom: 0; border-radius: 14px 14px 0 0;
   box-shadow: 0 -6px 20px rgba(0, 0, 0, .25);
   transform: translateY(100%);
-  transition: transform .22s ease-out;
+  transition: transform .22s ease-out, height .2s ease-out;
 }
+#memo-screen[data-level="2"] { height: var(--mh2); }
+#memo-screen[data-level="3"] { height: var(--mh3); }
 #memo-screen.open { transform: translateY(0); }
 #memo-screen.dragging { transition: none; }
 #memo-screen[hidden] { display: none; }
