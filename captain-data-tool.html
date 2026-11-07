@@ -39,13 +39,31 @@
     font-weight: 700; color: #fff; background: var(--ball-main); font-variant-numeric: tabular-nums; }
   .ball.bonus { background: var(--ball-bonus); }
   .label { font-size: 13px; color: var(--sub); margin-top: 6px; }
+  .btn { font: inherit; font-size: 15px; padding: 9px 14px; border-radius: 8px; border: 1px solid var(--accent); background: var(--accent); color: #fff; cursor: pointer; min-height: 44px; }
+  .btn.sub { background: transparent; color: var(--accent); }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+  .btn.small { min-height: 36px; padding: 5px 12px; font-size: 14px; margin: 6px 0 0; }
+  .sum { margin: 8px 0 0; }
+  .cat { border-top: 1px solid var(--line); padding-top: 8px; margin-top: 10px; }
+  .cat h3 { font-size: 15px; margin: 0 0 4px; }
+  .cat ul { margin: 4px 0 0; padding-left: 1.2em; font-size: 14px; }
+  .cat li { margin: 2px 0; overflow-wrap: anywhere; }
+  .warnbox { border: 1px solid var(--ng); background: var(--ng-bg); border-radius: 8px; padding: 8px 10px; margin: 10px 0 0; }
+  .warnbox h3 { font-size: 15px; margin: 0 0 4px; color: var(--ng); }
+  .warnbox ul { margin: 4px 0 0; padding-left: 1.2em; font-size: 14px; }
+  .cf { display: flex; gap: 10px; align-items: flex-start; margin: 10px 0 0; padding: 10px; border: 2px solid var(--ng); border-radius: 8px; background: var(--card); font-size: 14px; }
+  .cf input { width: 22px; height: 22px; flex: none; margin-top: 2px; }
+  .cf b { color: var(--ng); }
+  .steps { margin: 6px 0 0; padding-left: 1.4em; font-size: 14px; }
+  .steps li { margin: 6px 0; }
+  .link { display: inline-block; margin: 8px 0 0; font-size: 14px; }
   [hidden] { display: none !important; }
 </style>
 </head>
 <body>
 <main>
   <h1>内蔵データ作成ツール(船長用)</h1>
-  <p class="note">CSVを読み取って検証するだけのページです。何も保存せず、GitHubにも書き込みません(このページの通信・保存はありません)。予想ツール本体のページとは、コードもデータも共有しません。</p>
+  <p class="note">CSVを読み取って検証し、現在の内蔵データと比べて、新しい default-data.json を作るページです。何も保存せず、GitHubにも書き込みません。通信は、同じ場所にある default-data.json を読み取る1回だけです(外部への送信はありません)。予想ツール本体のページとは、コードもデータも共有しません。</p>
 
   <section id="sec-file">
     <h2>① CSVを選ぶ</h2>
@@ -77,9 +95,37 @@
     <div class="balls" id="lt-bonus"></div>
   </section>
 
+  <section id="sec-compare" hidden>
+    <h2>④ 現在の内蔵データとの比較</h2>
+    <div id="cmp-body" class="muted"></div>
+  </section>
+
+  <section id="sec-warn" hidden>
+    <h2>⑤ 確認事項</h2>
+    <div id="warn-body"></div>
+  </section>
+
   <section id="sec-json" hidden>
-    <h2>④ JSON(内部で生成)</h2>
-    <div id="json-info" class="muted"></div>
+    <h2>⑥ JSONの作成とダウンロード</h2>
+    <div id="make-hint" class="muted"></div>
+    <button type="button" class="btn" id="btn-make" disabled>JSONを作成して検査する</button>
+    <div id="json-info" class="muted" style="margin-top:8px"></div>
+    <div id="dl-area" hidden>
+      <button type="button" class="btn" id="btn-dl">default-data.json をダウンロード</button>
+      <div class="muted" style="margin-top:6px">ダウンロードが始まらないときは、こちらのリンクを押してください: <a id="dl-link" download="default-data.json" href="#">default-data.json</a></div>
+    </div>
+  </section>
+
+  <section id="sec-steps" hidden>
+    <h2>⑦ GitHubへの反映手順(手作業)</h2>
+    <p class="muted" style="margin:0">このページはGitHubに書き込みません。次の手順を、船長の手で行ってください。</p>
+    <ol class="steps">
+      <li>ダウンロードした <b>default-data.json</b> を確認する(ファイル名が default-data.json で、端末に保存されているか)。</li>
+      <li>GitHubで <b>noa-loto-lab/loto7-test</b> を開く。<br><a class="link" href="https://github.com/noa-loto-lab/loto7-test" target="_blank" rel="noopener noreferrer">https://github.com/noa-loto-lab/loto7-test</a></li>
+      <li>既存の <b>default-data.json</b> を、ダウンロードしたファイルで置き換える(同じ名前のファイルを上書きアップロードする)。</li>
+      <li>変更内容を確認して、コミットする。</li>
+      <li>GitHub Pagesに公開されたら、予想ツールの設定から「内蔵データを読み込む」を実行し、最新回・開催日・本数字・ボーナス数字を確認する。<br><a class="link" href="https://noa-loto-lab.github.io/loto7-test/" target="_blank" rel="noopener noreferrer">https://noa-loto-lab.github.io/loto7-test/</a></li>
+    </ol>
   </section>
 </main>
 
@@ -88,9 +134,9 @@
   'use strict';
 
   // ======================================================================
-  // 船長専用・内蔵データ作成ツール(段階1)
+  // 船長専用・内蔵データ作成ツール(段階2)
   //  - このページは単独で動作する(index.html・app.js・style.css は読み込まない)
-  //  - IndexedDB・localStorage・Cookie・通信は一切使わない
+  //  - IndexedDB・localStorage・Cookie は使わない。通信は、同じ場所の default-data.json の読み取り(GET)だけ
   //  - CSV検証の規則は、予想ツール(app.js の decodeCsv / parseCsv / parseDate / validateCsv)と同じ
   // ======================================================================
 
@@ -117,24 +163,52 @@
     catch (e2) { throw new Error('このブラウザはCP932(Shift_JIS)の読み込みに対応していません。'); }
   }
 
-  // ---- 簡易CSVパーサ(ダブルクォート・改行コード差異に対応)。空行は捨てる ----
+  // ---- CSVパーサ(引用符の書式を厳密に検証する)。空行は捨てる ----
+  // 戻り値 { rows, errors }。引用符の書式エラーがあるときは errors に「N行目: …」を入れる(その場合 rows は使わない)。
+  // 正常な書式: 通常のカンマ区切り / "…" で囲んだ値(中にカンマ・改行・"" で表す " を含められる)/ 改行は CRLF・LF・CR
+  // 次はエラー: (A) 閉じていないダブルクォート (B) 引用符で囲まれていない値の途中のダブルクォート
+  //             (C) 閉じ引用符の直後に、区切り(,)・改行・ファイル終端以外の文字(空白を含む)が続く
   function parseCsv(text) {
-    var rows = [], row = [], cur = '', q = false, i, ch;
-    for (i = 0; i < text.length; i++) {
+    var rows = [], row = [], cur = '', errors = [], line = 1, quoteLine = 0, i, ch, n = text.length;
+    var START = 0, PLAIN = 1, QUOTED = 2, AFTER = 3, state = START;
+    var MAX_QUOTE_ERRORS = 50;
+    function endField() { row.push(cur); cur = ''; state = START; }
+    function endRow() { endField(); rows.push(row); row = []; }
+    function shown(c) { return c === ' ' ? '空白' : (c === '\t' ? 'タブ' : (c === '\u3000' ? '全角空白' : '「' + c + '」')); }
+    function err(msg) { if (errors.length < MAX_QUOTE_ERRORS) errors.push(msg); }
+    for (i = 0; i < n; i++) {
       ch = text[i];
-      if (q) {
-        if (ch === '"') { if (text[i + 1] === '"') { cur += '"'; i++; } else { q = false; } }
-        else cur += ch;
-      } else if (ch === '"') { q = true; }
-      else if (ch === ',') { row.push(cur); cur = ''; }
-      else if (ch === '\n' || ch === '\r') {
+      if (state === QUOTED) {
+        if (ch === '"') {
+          if (text[i + 1] === '"') { cur += '"'; i++; }   // "" は、値の中の " 1個
+          else state = AFTER;                              // 閉じ引用符
+        } else {
+          if (ch === '\n' || (ch === '\r' && text[i + 1] !== '\n')) line++;   // 引用符の中の改行(CRLFは1回と数える)
+          cur += ch;
+        }
+        continue;
+      }
+      if (ch === ',') { endField(); continue; }
+      if (ch === '\n' || ch === '\r') {
         if (ch === '\r' && text[i + 1] === '\n') i++;
-        row.push(cur); cur = '';
-        rows.push(row); row = [];
-      } else cur += ch;
+        endRow(); line++;
+        continue;
+      }
+      if (state === AFTER) {   // (C) 閉じ引用符のあとに、区切り・改行以外の文字
+        err(line + '行目: 閉じ引用符(")の直後に、区切り(,)・改行以外の文字(' + shown(ch) + ')が続いています。');
+        cur += ch; state = PLAIN;
+        continue;
+      }
+      if (ch === '"') {
+        if (state === START) { state = QUOTED; quoteLine = line; }   // 値の先頭の " は、引用符の開始
+        else { err(line + '行目: 引用符で囲まれていない値の途中に、ダブルクォート(")があります(値全体を引用符で囲むか、取り除いてください)。'); cur += ch; }   // (B)
+        continue;
+      }
+      cur += ch; state = PLAIN;
     }
-    if (cur !== '' || row.length) { row.push(cur); rows.push(row); }
-    return rows.filter(function (r) { return !(r.length === 1 && r[0].trim() === ''); });
+    if (state === QUOTED) err(quoteLine + '行目: ダブルクォート(")が閉じられていません(ファイルの最後まで閉じられませんでした)。');   // (A)
+    else if (state !== START || row.length || cur !== '') endRow();
+    return { rows: rows.filter(function (r) { return !(r.length === 1 && r[0].trim() === ''); }), errors: errors };
   }
 
   // 2013/4/5, 2013-04-05, 2013.4.5, 2013年4月5日 → '2013-04-05'(内蔵データJSONの日付形式)。読み取れなければ null
@@ -153,7 +227,9 @@
     def = def || DEF;
     var errors = [], list = [];
     function err(msg) { errors.push(msg); }
-    var rows = parseCsv(text), HEAD = def.csvHeader, MAX = def.max;
+    var parsed = parseCsv(text), HEAD = def.csvHeader, MAX = def.max;
+    if (parsed.errors.length) return { errors: parsed.errors, list: [], dataRows: 0 };   // 引用符の書式エラー(中身の検証には進まない)
+    var rows = parsed.rows;
     if (!rows.length) return { errors: ['ファイルが空です。'], list: [], dataRows: 0 };
     var head = rows[0].map(function (h) { return h.replace(/^\uFEFF/, '').trim(); });
     if (head.length !== HEAD.length) {
@@ -222,10 +298,137 @@
       '}\n';
   }
 
+  // ---- 内蔵データJSONの検査(予想ツール app.js の validateBuiltin と同じ条件) ----
+  // json はパース済みのオブジェクト。戻り値 { errors, list }。list の各要素 { round, date('YYYY-MM-DD'), main, bonus }(JSONの並びのまま)
+  function isInt(v) { return typeof v === 'number' && isFinite(v) && Math.floor(v) === v; }
+  function validateBuiltinJson(json, def) {
+    def = def || DEF;
+    var errors = [], list = [];
+    function err(m) { errors.push(m); }
+    function bail(m) { return { errors: [m], list: [] }; }
+    if (!json || typeof json !== 'object' || Array.isArray(json)) return bail('内蔵データの形式が正しくありません。');
+    if (json.schemaVersion !== 1) return bail('内蔵データの形式バージョン(schemaVersion)が想定と違います。');
+    if (!json.lotteries || typeof json.lotteries !== 'object') return bail('内蔵データに lotteries がありません。');
+    var e = json.lotteries[def.id];
+    if (!e || typeof e !== 'object') return bail('内蔵データに' + def.label + '(' + def.id + ')のデータがありません。');
+    if (typeof e.source !== 'string' || !e.source) return bail('内蔵データの元ファイル名(source)がありません。');
+    if (!Array.isArray(e.draws) || !e.draws.length) return bail('内蔵データに抽選履歴がありません。');
+    var seen = {};
+    function numsOk(a, n) {
+      if (!Array.isArray(a) || a.length !== n) return false;
+      for (var i = 0; i < a.length; i++) if (!isInt(a[i]) || a[i] < 1 || a[i] > def.max) return false;
+      return true;
+    }
+    e.draws.forEach(function (d, i) {
+      var at = (i + 1) + '件目:';
+      if (!d || typeof d !== 'object') { err(at + '形式が正しくありません。'); return; }
+      if (!isInt(d.round) || d.round < 1) { err(at + '開催回「' + d.round + '」が正しくありません。'); return; }
+      if (seen[d.round]) { err(at + '開催回' + d.round + 'が重複しています。'); return; }
+      seen[d.round] = true;
+      var bad = false;
+      var date = typeof d.date === 'string' ? parseDate(d.date) : null;
+      if (!date) { err(at + '第' + d.round + '回の開催日「' + d.date + '」を読み取れません。'); bad = true; }
+      var nums = {}, bonus = {};
+      if (!numsOk(d.main, def.mainCount)) { err(at + '第' + d.round + '回の本数字が正しくありません。'); bad = true; }
+      else {
+        d.main.forEach(function (v) { nums[v] = true; });
+        if (Object.keys(nums).length !== def.mainCount) { err(at + '第' + d.round + '回の本数字に重複があります。'); bad = true; }
+      }
+      if (!numsOk(d.bonus, def.bonusCount)) { err(at + '第' + d.round + '回のボーナス数字が正しくありません。'); bad = true; }
+      else {
+        d.bonus.forEach(function (v) { bonus[v] = true; });
+        var overlap = Object.keys(bonus).length !== def.bonusCount || d.bonus.some(function (v) { return nums[v]; });
+        if (overlap) { err(at + '第' + d.round + '回のボーナス数字が、本数字または他のボーナス数字と重複しています。'); bad = true; }
+      }
+      if (!bad) list.push({ round: d.round, date: date, main: d.main.slice(), bonus: d.bonus.slice() });
+    });
+    if (errors.length) return { errors: errors, list: [] };
+    list.sort(function (a, b) { return a.round - b.round; });
+    var latest = list[list.length - 1];
+    if (e.count !== list.length) err('収録回数(count=' + e.count + ')と実際の件数(' + list.length + ')が一致しません。');
+    if (e.latestRound !== latest.round) err('最新回(latestRound=' + e.latestRound + ')と実際の最新回(' + latest.round + ')が一致しません。');
+    if (typeof e.latestDate !== 'string' || parseDate(e.latestDate) !== latest.date) err('最新開催日(latestDate)が実際の最新回の開催日と一致しません。');
+    return errors.length ? { errors: errors, list: [] } : { errors: [], list: list };
+  }
+
+  // ---- 比較 ----
+  // 数字は並び順を問わない集合として比べる。日付は YYYY-MM-DD に正規化して比べる。
+  function setKey(a) { return a.slice().sort(function (x, y) { return x - y; }).join(','); }
+  function sortedNums(a) { return a.slice().sort(function (x, y) { return x - y; }); }
+  function normDate(s) { return parseDate(String(s)) || String(s); }
+
+  // curList: 現在の内蔵データ / newList: 今回のCSV。どちらも { round, date, main, bonus } の配列
+  // 戻り値: 新規追加・本数字変更・ボーナス数字変更・開催日変更・削除 の一覧と、変更なしの回数
+  // 同じ回に複数の変更があれば、該当する分類のそれぞれに数える。新規追加は「変更」には含めない
+  function compareData(curList, newList) {
+    var cur = {}, nw = {}, out = { added: [], mainChanged: [], bonusChanged: [], dateChanged: [], removed: [], same: 0 };
+    curList.forEach(function (d) { cur[d.round] = d; });
+    newList.forEach(function (d) { nw[d.round] = d; });
+    newList.slice().sort(function (a, b) { return a.round - b.round; }).forEach(function (n) {
+      var c = cur[n.round];
+      if (!c) { out.added.push({ round: n.round, date: normDate(n.date), main: sortedNums(n.main), bonus: sortedNums(n.bonus) }); return; }
+      var diff = false;
+      if (setKey(c.main) !== setKey(n.main)) { out.mainChanged.push({ round: n.round, before: sortedNums(c.main), after: sortedNums(n.main) }); diff = true; }
+      if (setKey(c.bonus) !== setKey(n.bonus)) { out.bonusChanged.push({ round: n.round, before: sortedNums(c.bonus), after: sortedNums(n.bonus) }); diff = true; }
+      if (normDate(c.date) !== normDate(n.date)) { out.dateChanged.push({ round: n.round, before: normDate(c.date), after: normDate(n.date) }); diff = true; }
+      if (!diff) out.same++;
+    });
+    curList.slice().sort(function (a, b) { return a.round - b.round; }).forEach(function (c) {
+      if (!nw[c.round]) out.removed.push({ round: c.round, date: normDate(c.date), main: sortedNums(c.main), bonus: sortedNums(c.bonus) });
+    });
+    return out;
+  }
+
+  // 欠けている開催回: 最小開催回〜最大開催回の間に存在しない回(1回から始まる必要はない)
+  function findGaps(list) {
+    var have = {}, min = Infinity, max = -Infinity, miss = [], r;
+    list.forEach(function (d) { have[d.round] = true; if (d.round < min) min = d.round; if (d.round > max) max = d.round; });
+    if (!list.length) return [];
+    for (r = min; r <= max; r++) if (!have[r]) miss.push(r);
+    return miss;
+  }
+  function toRanges(rounds) {
+    var out = [], i, s;
+    for (i = 0; i < rounds.length; i++) {
+      if (out.length && rounds[i] === out[out.length - 1].to + 1) out[out.length - 1].to = rounds[i];
+      else out.push({ from: rounds[i], to: rounds[i] });
+    }
+    s = out; return s;
+  }
+  // 開催日の逆転: 開催回の昇順で、前の回より古い日付になる回(同じ日付は警告しない。7日間隔の確認はしない)
+  function findInversions(list) {
+    var s = list.slice().sort(function (a, b) { return a.round - b.round; }), out = [], i;
+    for (i = 1; i < s.length; i++) {
+      if (s[i].date < s[i - 1].date) out.push({ round: s[i].round, date: s[i].date, prevRound: s[i - 1].round, prevDate: s[i - 1].date });
+    }
+    return out;
+  }
+
+  // 作成したJSONの自己検査: JSONとして読める → 予想ツールと同じ条件を満たす → CSVの内容と完全に一致する
+  // 戻り値 { ok, errors }
+  function selfCheck(jsonText, csvList, sourceName) {
+    var errors = [], obj, v, i, a, b;
+    try { obj = JSON.parse(jsonText); } catch (e) { return { ok: false, errors: ['JSONとして読み取れません。'] }; }
+    v = validateBuiltinJson(obj, DEF);
+    if (v.errors.length) return { ok: false, errors: v.errors.slice(0, 5) };
+    var e = obj.lotteries[DEF.id], sorted = csvList.slice().sort(function (x, y) { return x.round - y.round; });
+    if (e.source !== sourceName) errors.push('元ファイル名(source)がCSVのファイル名と一致しません。');
+    if (e.draws.length !== sorted.length) errors.push('件数がCSVと一致しません。');
+    else for (i = 0; i < sorted.length; i++) {
+      a = sorted[i]; b = e.draws[i];
+      if (a.round !== b.round || a.date !== b.date || a.main.join(',') !== b.main.join(',') || a.bonus.join(',') !== b.bonus.join(',')) { errors.push('第' + a.round + '回の内容がCSVと一致しません。'); break; }
+    }
+    return { ok: errors.length === 0, errors: errors };
+  }
+
   // ---- 画面 ----
   var $ = function (id) { return document.getElementById(id); };
   var MAX_ERR_SHOWN = 20;
-  var state = { fileName: '', encoding: '', result: null, json: '' };
+  var SHOW_FIRST = 30;                  // 変更一覧は、最初に30件だけ表示する(残りは展開)
+  var FETCH_TIMEOUT_MS = 15000;
+  var CURRENT_URL = 'default-data.json';   // 同じ場所にある現在の内蔵データ(読み取りだけ。ここ以外の通信はしない)
+  // cmp: { status: 'idle'|'loading'|'ok'|'fail', reason, cur(list), diff }
+  var state = { fileName: '', encoding: '', result: null, json: '', cmp: { status: 'idle' }, gaps: [], inv: [], objUrl: '', token: 0 };
 
   function fmtSize(n) { return n < 1024 ? n + ' B' : (n < 1048576 ? (n / 1024).toFixed(1) + ' KB' : (n / 1048576).toFixed(2) + ' MB'); }
   function clear(el) { while (el.firstChild) el.removeChild(el.firstChild); }
@@ -234,10 +437,23 @@
     clear(el);
     nums.forEach(function (n) { var b = document.createElement('span'); b.className = 'ball' + (cls ? ' ' + cls : ''); b.textContent = String(n); el.appendChild(b); });
   }
+  function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+  function rng(list) { return list.length ? '第' + list[0].round + '〜' + list[list.length - 1].round + '回' : '-'; }
+  function nums(a) { return a.join(', '); }
+
+  function releaseUrl() { if (state.objUrl) { try { URL.revokeObjectURL(state.objUrl); } catch (e) { /* 無視 */ } } state.objUrl = ''; }
+  function invalidateJson() {
+    state.json = ''; releaseUrl();
+    $('dl-area').hidden = true; $('sec-steps').hidden = true; $('json-info').textContent = '';
+    $('dl-link').removeAttribute('href');
+  }
 
   function reset() {
-    state.fileName = ''; state.encoding = ''; state.result = null; state.json = '';
-    $('fileinfo').hidden = true; $('sec-latest').hidden = true; $('sec-json').hidden = true;
+    state.token++;
+    state.fileName = ''; state.encoding = ''; state.result = null; state.cmp = { status: 'idle' }; state.gaps = []; state.inv = [];
+    invalidateJson();
+    $('fileinfo').hidden = true; $('sec-latest').hidden = true; $('sec-compare').hidden = true; $('sec-warn').hidden = true; $('sec-json').hidden = true;
+    clear($('cmp-body')); clear($('warn-body')); $('btn-make').disabled = true;
   }
 
   function showFileInfo(file, encoding, rows) {
@@ -256,6 +472,221 @@
     box.appendChild(ul);
     var p = document.createElement('p'); p.className = 'muted'; p.textContent = 'エラーがあるため、JSONは作成できません。CSVを直して、もう一度選んでください。';
     box.appendChild(p);
+  }
+
+  // 現在の内蔵データ(default-data.json)を読み取って検査する。cb({ ok, list, reason })
+  function fetchCurrent(cb) {
+    var finished = false, ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null, timer;
+    function finish(r) { if (finished) return; finished = true; clearTimeout(timer); cb(r); }
+    timer = setTimeout(function () { if (ctl) { try { ctl.abort(); } catch (e) { /* 無視 */ } } finish({ ok: false, reason: '読み込みに時間がかかりすぎました(' + (FETCH_TIMEOUT_MS / 1000) + '秒)。' }); }, FETCH_TIMEOUT_MS);
+    if (typeof fetch !== 'function') { finish({ ok: false, reason: 'このブラウザは読み込み(fetch)に対応していません。' }); return; }
+    var opt = { cache: 'no-store' }; if (ctl) opt.signal = ctl.signal;
+    fetch(CURRENT_URL, opt).then(function (res) {
+      if (!res.ok) throw new Error('読み込みに失敗しました(HTTP ' + res.status + ')。');
+      return res.text();
+    }).then(function (txt) {
+      var obj;
+      try { obj = JSON.parse(txt); } catch (e) { finish({ ok: false, reason: '現在の内蔵データがJSONとして読み取れません。' }); return; }
+      var v = validateBuiltinJson(obj, DEF);
+      if (v.errors.length) { finish({ ok: false, reason: '現在の内蔵データの形式が正しくありません: ' + v.errors[0] }); return; }
+      finish({ ok: true, list: v.list });
+    }).catch(function (e) {
+      finish({ ok: false, reason: (e && e.message && /HTTP/.test(e.message)) ? e.message : '現在の内蔵データ(default-data.json)を読み込めませんでした(通信エラー、またはファイルがありません)。' });
+    });
+  }
+
+  // 一覧(最初の30件+残りを展開)
+  function itemList(parent, items, fmt) {
+    var ul = el('ul'); parent.appendChild(ul);
+    function add(from, to) { for (var i = from; i < to; i++) ul.appendChild(el('li', '', fmt(items[i]))); }
+    add(0, Math.min(SHOW_FIRST, items.length));
+    if (items.length > SHOW_FIRST) {
+      var btn = el('button', 'btn sub small', '残り' + (items.length - SHOW_FIRST) + '件を表示する');
+      btn.type = 'button'; btn.className = 'btn sub small more';
+      btn.addEventListener('click', function () { add(SHOW_FIRST, items.length); btn.remove(); });
+      parent.appendChild(btn);
+    }
+  }
+  function category(parent, title, items, fmt, id) {
+    var c = el('div', 'cat'); c.id = id;
+    c.appendChild(el('h3', '', title + ': ' + items.length + '件'));
+    if (items.length) itemList(c, items, fmt); else c.appendChild(el('div', 'muted', 'なし'));
+    parent.appendChild(c);
+  }
+
+  function renderCompare() {
+    var box = $('cmp-body'), cmp = state.cmp, list = state.result.list;
+    clear(box); box.className = '';
+    $('sec-compare').hidden = false;
+    if (cmp.status === 'loading') { box.className = 'muted'; box.textContent = '現在の内蔵データを読み込んで、比べています…'; return; }
+    if (cmp.status === 'fail') {
+      box.appendChild(badge('ng', '比較できません'));
+      box.appendChild(el('p', '', cmp.reason));
+      box.appendChild(el('p', 'muted', '現在の内蔵データと比べられないため、過去の回が変わっていないかは確認できていません(「変更なし」という意味ではありません)。CSV自体は検証に通っています。'));
+      var rt = el('button', 'btn sub small', 'もう一度比較する'); rt.type = 'button'; rt.id = 'btn-retry';
+      rt.addEventListener('click', function () { startCompare(); });
+      box.appendChild(rt);
+      return;
+    }
+    var d = cmp.diff, cur = cmp.cur, changed = d.mainChanged.length + d.bonusChanged.length + d.dateChanged.length + d.removed.length;
+    if (!changed && !d.added.length) box.appendChild(badge('ok', '現在の内蔵データと同じ内容です'));
+    else if (!changed) box.appendChild(badge('ok', '新しい回の追加だけです(過去の回の変更・削除なし)'));
+    else box.appendChild(badge('ng', '過去の回に変更・削除があります(' + changed + '件)'));
+    var dl = el('dl', 'sum'); dl.id = 'cmp-sum';
+    function row(k, v, id) { dl.appendChild(el('dt', '', k)); var dd = el('dd', '', v); if (id) dd.id = id; dl.appendChild(dd); }
+    row('現在の内蔵データ', cur.length + '回分(' + rng(cur) + ')');
+    row('今回のCSV', list.length + '回分(' + rng(list) + ')');
+    row('新規追加', d.added.length + '回', 'n-added');
+    row('本数字の変更', d.mainChanged.length + '件', 'n-main');
+    row('ボーナス数字の変更', d.bonusChanged.length + '件', 'n-bonus');
+    row('開催日の変更', d.dateChanged.length + '件', 'n-date');
+    row('削除', d.removed.length + '回', 'n-removed');
+    row('変更なしの回', d.same + '回', 'n-same');
+    box.appendChild(dl);
+    box.appendChild(el('p', 'muted', '同じ回に複数の変更があるときは、該当する分類それぞれに数えています。数字は並び順を問わず比べています。'));
+    category(box, '新規追加', d.added, function (x) { return '第' + x.round + '回 ' + x.date + ' 本数字 ' + nums(x.main) + ' / ボーナス ' + nums(x.bonus); }, 'cat-added');
+    category(box, '本数字の変更', d.mainChanged, function (x) { return '第' + x.round + '回 本数字: ' + nums(x.before) + ' → ' + nums(x.after); }, 'cat-main');
+    category(box, 'ボーナス数字の変更', d.bonusChanged, function (x) { return '第' + x.round + '回 ボーナス数字: ' + nums(x.before) + ' → ' + nums(x.after); }, 'cat-bonus');
+    category(box, '開催日の変更', d.dateChanged, function (x) { return '第' + x.round + '回 開催日: ' + x.before + ' → ' + x.after; }, 'cat-date');
+    category(box, '削除(現在の内蔵データにあり、今回のCSVにない回)', d.removed, function (x) { return '第' + x.round + '回 削除 (' + x.date + ' 本数字 ' + nums(x.main) + ' / ボーナス ' + nums(x.bonus) + ')'; }, 'cat-removed');
+  }
+
+  // 必要な確認の一覧。{ id, text } の配列(確認が要らない場合は空)
+  function requiredConfirms() {
+    var out = [], cmp = state.cmp, g = state.gaps, v = state.inv;
+    if (g.length || v.length) {
+      var parts = [];
+      if (g.length) parts.push('欠けている開催回(' + g.length + '回分)');
+      if (v.length) parts.push('開催日の逆転(' + v.length + '件)');
+      out.push({ id: 'cf1', mark: '確認①', text: parts.join('と') + 'を確認しました。このCSVのまま内蔵データを作成します。' });
+    }
+    if (cmp.status === 'ok') {
+      var d = cmp.diff;
+      if (d.mainChanged.length + d.bonusChanged.length + d.dateChanged.length + d.removed.length > 0) {
+        out.push({ id: 'cf2', mark: '確認②', text: '変更一覧は分類別の件数と先頭30件を確認しました。必要に応じて残りも展開し、変更内容全体(本数字変更' + d.mainChanged.length + '件・ボーナス数字変更' + d.bonusChanged.length + '件・開催日変更' + d.dateChanged.length + '件・削除' + d.removed.length + '件)を確認しました。' });
+      }
+    } else if (cmp.status === 'fail') {
+      out.push({ id: 'cf3', mark: '確認③', text: '現在の内蔵データと比較できないことを確認しました。過去の回が変わっていないかを確認できないまま、このCSVで内蔵データを作成します。' });
+    }
+    return out;
+  }
+
+  function renderWarn() {
+    var box = $('warn-body'), list = state.result.list, cmp = state.cmp;
+    clear(box);
+    $('sec-warn').hidden = false; $('sec-json').hidden = false;
+    var g = state.gaps, v = state.inv;
+    if (g.length) {
+      var wb = el('div', 'warnbox'); wb.id = 'warn-gaps';
+      wb.appendChild(el('h3', '', '欠けている開催回: ' + g.length + '回分'));
+      wb.appendChild(el('div', 'muted', '第' + list[0].round + '〜' + list[list.length - 1].round + '回の間に、CSVに無い開催回があります。'));
+      itemList(wb, toRanges(g), function (r) { return r.from === r.to ? '第' + r.from + '回' : '第' + r.from + '〜' + r.to + '回(' + (r.to - r.from + 1) + '回分)'; });
+      box.appendChild(wb);
+    }
+    if (v.length) {
+      var wi = el('div', 'warnbox'); wi.id = 'warn-inv';
+      wi.appendChild(el('h3', '', '開催日の逆転: ' + v.length + '件'));
+      wi.appendChild(el('div', 'muted', '開催回の昇順で、前の回より古い日付になっている回です(同じ日付は対象外)。'));
+      itemList(wi, v, function (x) { return '第' + x.round + '回(' + x.date + ')が、前の第' + x.prevRound + '回(' + x.prevDate + ')より古い日付です。'; });
+      box.appendChild(wi);
+    }
+    if (cmp.status === 'ok' && cmp.diff.mainChanged.length + cmp.diff.bonusChanged.length + cmp.diff.dateChanged.length + cmp.diff.removed.length > 0) {
+      var wc = el('div', 'warnbox'); wc.id = 'warn-changed';
+      wc.appendChild(el('h3', '', '過去の回の変更・削除があります'));
+      wc.appendChild(el('div', '', '④の一覧(本数字' + cmp.diff.mainChanged.length + '件・ボーナス' + cmp.diff.bonusChanged.length + '件・開催日' + cmp.diff.dateChanged.length + '件・削除' + cmp.diff.removed.length + '件)を確認してください。'));
+      box.appendChild(wc);
+    }
+    if (cmp.status === 'fail') {
+      var wf = el('div', 'warnbox'); wf.id = 'warn-cmpfail';
+      wf.appendChild(el('h3', '', '現在の内蔵データと比較できません'));
+      wf.appendChild(el('div', '', '過去の回が変わっていないかは確認できていません。'));
+      box.appendChild(wf);
+    }
+    var req = requiredConfirms();
+    if (!req.length && cmp.status !== 'loading') {
+      box.appendChild(el('p', 'muted', '追加の確認が必要な項目はありません。'));
+    }
+    req.forEach(function (c) {
+      var lab = el('label', 'cf'); lab.id = 'lab-' + c.id;
+      var cb = document.createElement('input'); cb.type = 'checkbox'; cb.id = c.id;
+      cb.addEventListener('change', function () { invalidateJson(); updateMake(); });
+      lab.appendChild(cb);
+      var sp = el('span'); sp.appendChild(el('b', '', c.mark + ' ')); sp.appendChild(document.createTextNode(c.text)); lab.appendChild(sp);
+      box.appendChild(lab);
+    });
+    updateMake();
+  }
+
+  function pendingConfirms() {
+    var out = [];
+    requiredConfirms().forEach(function (c) { var cb = $(c.id); if (!cb || !cb.checked) out.push(c.mark); });
+    return out;
+  }
+  function updateMake() {
+    var btn = $('btn-make'), hint = $('make-hint');
+    if (!state.result || state.result.errors.length) { btn.disabled = true; hint.textContent = ''; return; }
+    if (state.cmp.status === 'loading') { btn.disabled = true; hint.textContent = '現在の内蔵データとの比較が終わるまで、お待ちください。'; return; }
+    var pend = pendingConfirms();
+    btn.disabled = pend.length > 0;
+    hint.textContent = pend.length ? ('未確認の項目があります(' + pend.join('・') + ')。⑤の確認にチェックを入れると、作成できます。') : 'JSONを作成できます。';
+  }
+
+  function startCompare() {
+    var my = ++state.token, list = state.result.list;
+    invalidateJson();
+    state.cmp = { status: 'loading' };
+    renderCompare(); renderWarn();
+    fetchCurrent(function (r) {
+      if (my !== state.token) return;   // 途中で別のCSVが選ばれた
+      if (r.ok) {
+        var diff;
+        try { diff = compareData(r.list, list); } catch (e) { state.cmp = { status: 'fail', reason: '比較の途中でエラーが起きました。' }; renderCompare(); renderWarn(); return; }
+        state.cmp = { status: 'ok', cur: r.list, diff: diff };
+      } else state.cmp = { status: 'fail', reason: r.reason };
+      renderCompare(); renderWarn();
+    });
+  }
+
+  // JSONを作成して自己検査する(必要な確認がすべて済んでいるときだけ)。戻り値 { ok, text, errors }
+  function makeJson() {
+    var res = state.result;
+    if (!res || res.errors.length) return { ok: false, text: '', errors: ['CSVに問題があるため、作成できません。'] };
+    if (state.cmp.status === 'loading') return { ok: false, text: '', errors: ['比較が終わっていません。'] };
+    if (pendingConfirms().length) return { ok: false, text: '', errors: ['未確認の項目があります。'] };
+    var text;
+    try { text = buildJson(res.list, state.fileName, DEF); } catch (e) { return { ok: false, text: '', errors: [e.message] }; }
+    var chk = selfCheck(text, res.list, state.fileName);
+    if (!chk.ok) return { ok: false, text: '', errors: chk.errors };
+    return { ok: true, text: text, errors: [] };
+  }
+
+  function onMake() {
+    invalidateJson();
+    var r = makeJson(), info = $('json-info');
+    clear(info);
+    if (!r.ok) {
+      info.appendChild(badge('ng', 'JSONを作成できませんでした(ダウンロードはできません)'));
+      var ul = el('ul', 'errs'); r.errors.forEach(function (m) { ul.appendChild(el('li', '', m)); }); info.appendChild(ul);
+      return;
+    }
+    state.json = r.text;
+    var n = state.result.list.length;
+    info.appendChild(badge('ok', '作成して検査しました'));
+    info.appendChild(el('p', '', n + '回分・' + r.text.length.toLocaleString('ja-JP') + '文字。予想ツールと同じ条件で検査し、CSVの内容と完全に一致することを確認しました。'));
+    try {
+      var blob = new Blob([r.text], { type: 'application/json' });
+      state.objUrl = URL.createObjectURL(blob);
+      $('dl-link').setAttribute('href', state.objUrl);
+    } catch (e) { info.appendChild(el('p', 'muted', 'ダウンロード用のリンクを作れませんでした。')); return; }
+    $('dl-area').hidden = false; $('sec-steps').hidden = false;
+  }
+
+  function onDownload() {
+    if (!state.json || !state.objUrl) return;
+    var a = document.createElement('a');
+    a.href = state.objUrl; a.download = 'default-data.json'; a.style.display = 'none';
+    document.body.appendChild(a); a.click();
+    setTimeout(function () { if (a.parentNode) a.parentNode.removeChild(a); }, 0);
   }
 
   function handleFile(file) {
@@ -292,22 +723,22 @@
       balls($('lt-main'), latest.main, '');
       balls($('lt-bonus'), latest.bonus, 'bonus');
       $('sec-latest').hidden = false;
-      // JSONは内部で生成する(ダウンロードの画面は次の段階で追加)
-      try {
-        state.json = buildJson(list, file.name, DEF);
-        $('json-info').textContent = 'JSONを内部で生成しました(' + list.length + '回分・' + state.json.length.toLocaleString('ja-JP') + '文字)。ダウンロードの画面は、次の段階で追加します。';
-      } catch (e3) { state.json = ''; $('json-info').textContent = e3.message; }
-      $('sec-json').hidden = false;
+      state.gaps = findGaps(list); state.inv = findInversions(list);
+      startCompare();
     };
     reader.readAsArrayBuffer(file);
   }
 
   $('csv-input').addEventListener('change', function () { handleFile(this.files && this.files[0]); });
+  $('btn-make').addEventListener('click', onMake);
+  $('btn-dl').addEventListener('click', onDownload);
 
   // 検証用の入口(画面の動作には使わない。自動テストが、画面と同じ関数を直接呼ぶために公開する)
   window.CaptainTool = {
     defs: LOTTERY_DEFS, decodeCsv: decodeCsv, parseCsv: parseCsv, parseDate: parseDate,
-    validateCsv: validateCsv, buildJson: buildJson, state: state
+    validateCsv: validateCsv, buildJson: buildJson, validateBuiltinJson: validateBuiltinJson,
+    compareData: compareData, findGaps: findGaps, findInversions: findInversions, selfCheck: selfCheck,
+    makeJson: makeJson, state: state
   };
 })();
 </script>
