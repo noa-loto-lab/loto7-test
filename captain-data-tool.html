@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>内蔵データ作成ツール(船長用)</title>
+<style>
+  :root {
+    --bg: #f7f6f1; --card: #ffffff; --ink: #222; --sub: #666; --line: #d6d3c8;
+    --ok: #1e7a3c; --ok-bg: #e6f4ea; --ng: #a11a1a; --ng-bg: #fbeaea; --accent: #1f3a5f;
+    --ball-main: #d3202e; --ball-bonus: #2a6fd6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #17181a; --card: #222427; --ink: #eceae4; --sub: #a5a39b; --line: #3a3d41;
+      --ok: #7fd49b; --ok-bg: #1b3325; --ng: #ff9b9b; --ng-bg: #3a1f1f; --accent: #9ec1ff; }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", Meiryo, sans-serif;
+    padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); }
+  main { max-width: 720px; margin: 0 auto; }
+  h1 { font-size: 20px; margin: 4px 0 6px; }
+  h2 { font-size: 16px; margin: 0 0 8px; color: var(--accent); }
+  .note { font-size: 13px; color: var(--sub); margin: 0 0 14px; }
+  section { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin: 0 0 12px; }
+  input[type=file] { width: 100%; font-size: 15px; padding: 8px 0; }
+  dl { margin: 8px 0 0; display: grid; grid-template-columns: 8.5em 1fr; gap: 2px 8px; font-size: 14px; }
+  dt { color: var(--sub); } dd { margin: 0; overflow-wrap: anywhere; }
+  .status { display: inline-block; font-weight: 700; padding: 2px 10px; border-radius: 999px; font-size: 14px; }
+  .status.ok { color: var(--ok); background: var(--ok-bg); }
+  .status.ng { color: var(--ng); background: var(--ng-bg); }
+  .errs { margin: 8px 0 0; padding-left: 1.3em; font-size: 14px; color: var(--ng); }
+  .errs li { margin: 2px 0; overflow-wrap: anywhere; }
+  .muted { color: var(--sub); font-size: 13px; }
+  .balls { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }
+  .ball { min-width: 2.2em; height: 2.2em; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+    font-weight: 700; color: #fff; background: var(--ball-main); font-variant-numeric: tabular-nums; }
+  .ball.bonus { background: var(--ball-bonus); }
+  .label { font-size: 13px; color: var(--sub); margin-top: 6px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1>内蔵データ作成ツール(船長用)</h1>
+  <p class="note">CSVを読み取って検証するだけのページです。何も保存せず、GitHubにも書き込みません(このページの通信・保存はありません)。予想ツール本体のページとは、コードもデータも共有しません。</p>
+
+  <section id="sec-file">
+    <h2>① CSVを選ぶ</h2>
+    <input type="file" id="csv-input" aria-label="抽選結果のCSVファイルを選ぶ">
+    <p class="muted" style="margin:6px 0 0">対象: ロト7の11列のCSV(開催回,開催日,第1〜第7数字,ボーナス数字1,2)。文字コードは UTF-8(BOM付き)/UTF-8/CP932 を自動判定します。</p>
+    <dl id="fileinfo" hidden>
+      <dt>ファイル名</dt><dd id="fi-name"></dd>
+      <dt>サイズ</dt><dd id="fi-size"></dd>
+      <dt>文字コード</dt><dd id="fi-enc"></dd>
+      <dt>データ行数</dt><dd id="fi-rows"></dd>
+    </dl>
+  </section>
+
+  <section id="sec-result">
+    <h2>② 検証結果</h2>
+    <div id="result" class="muted">CSVを選ぶと、ここに検証結果が表示されます。</div>
+  </section>
+
+  <section id="sec-latest" hidden>
+    <h2>③ 最新回(公式の結果と見比べてください)</h2>
+    <dl>
+      <dt>開催回</dt><dd id="lt-round"></dd>
+      <dt>開催日</dt><dd id="lt-date"></dd>
+      <dt>収録</dt><dd id="lt-range"></dd>
+    </dl>
+    <div class="label">本数字</div>
+    <div class="balls" id="lt-main"></div>
+    <div class="label">ボーナス数字</div>
+    <div class="balls" id="lt-bonus"></div>
+  </section>
+
+  <section id="sec-json" hidden>
+    <h2>④ JSON(内部で生成)</h2>
+    <div id="json-info" class="muted"></div>
+  </section>
+</main>
+
+<script>
+(function () {
+  'use strict';
+
+  // ======================================================================
+  // 船長専用・内蔵データ作成ツール(段階1)
+  //  - このページは単独で動作する(index.html・app.js・style.css は読み込まない)
+  //  - IndexedDB・localStorage・Cookie・通信は一切使わない
+  //  - CSV検証の規則は、予想ツール(app.js の decodeCsv / parseCsv / parseDate / validateCsv)と同じ
+  // ======================================================================
+
+  // くじ種別ごとの定義。今回有効なのはロト7のみ(ロト6・ミニロトは、この一覧に定義を足せば対応できる形。今回は対象外)
+  var LOTTERY_DEFS = {
+    loto7: {
+      id: 'loto7', label: 'ロト7', max: 37, mainCount: 7, bonusCount: 2,
+      csvHeader: ['開催回', '開催日', '第1数字', '第2数字', '第3数字', '第4数字', '第5数字', '第6数字', '第7数字', 'ボーナス数字1', 'ボーナス数字2']
+    }
+  };
+  var DEF = LOTTERY_DEFS.loto7;
+  var MAX_CSV_BYTES = 5 * 1024 * 1024;   // 予想ツールと同じ上限
+
+  // ---- 文字コード判定 ----
+  // 戻り値 { text, encoding }。UTF-8(BOM付き含む)と判定できればUTF-8、そうでなければCP932(Shift_JIS系)
+  function decodeCsv(buf) {
+    if (typeof TextDecoder === 'undefined') throw new Error('このブラウザは文字コードの変換(TextDecoder)に対応していません。');
+    var bytes = new Uint8Array(buf);
+    if (bytes.length >= 3 && bytes[0] === 0xEF && bytes[1] === 0xBB && bytes[2] === 0xBF) {
+      return { text: new TextDecoder('utf-8').decode(bytes.subarray(3)), encoding: 'UTF-8(BOM付き)' };
+    }
+    try { return { text: new TextDecoder('utf-8', { fatal: true }).decode(bytes), encoding: 'UTF-8' }; } catch (e) { /* UTF-8ではない → CP932 */ }
+    try { return { text: new TextDecoder('shift_jis').decode(bytes), encoding: 'CP932(Shift_JIS)' }; }   // WHATWG仕様のshift_jisはCP932(Windows-31J)互換
+    catch (e2) { throw new Error('このブラウザはCP932(Shift_JIS)の読み込みに対応していません。'); }
+  }
+
+  // ---- 簡易CSVパーサ(ダブルクォート・改行コード差異に対応)。空行は捨てる ----
+  function parseCsv(text) {
+    var rows = [], row = [], cur = '', q = false, i, ch;
+    for (i = 0; i < text.length; i++) {
+      ch = text[i];
+      if (q) {
+        if (ch === '"') { if (text[i + 1] === '"') { cur += '"'; i++; } else { q = false; } }
+        else cur += ch;
+      } else if (ch === '"') { q = true; }
+      else if (ch === ',') { row.push(cur); cur = ''; }
+      else if (ch === '\n' || ch === '\r') {
+        if (ch === '\r' && text[i + 1] === '\n') i++;
+        row.push(cur); cur = '';
+        rows.push(row); row = [];
+      } else cur += ch;
+    }
+    if (cur !== '' || row.length) { row.push(cur); rows.push(row); }
+    return rows.filter(function (r) { return !(r.length === 1 && r[0].trim() === ''); });
+  }
+
+  // 2013/4/5, 2013-04-05, 2013.4.5, 2013年4月5日 → '2013-04-05'(内蔵データJSONの日付形式)。読み取れなければ null
+  function parseDate(str) {
+    var m = /^(\d{4})\s*[\/\-.年]\s*(\d{1,2})\s*[\/\-.月]\s*(\d{1,2})\s*日?$/.exec(str);
+    if (!m) return null;
+    var y = +m[1], mo = +m[2], d = +m[3], dt = new Date(y, mo - 1, d);
+    if (dt.getFullYear() !== y || dt.getMonth() !== mo - 1 || dt.getDate() !== d) return null;
+    return y + '-' + (mo < 10 ? '0' : '') + mo + '-' + (d < 10 ? '0' : '') + d;
+  }
+
+  // ---- 検証 ----
+  // 戻り値 { errors: [...], list: [...], dataRows }。errors が空のときだけ list を使う。
+  // list の各要素 { round, date('YYYY-MM-DD'), main:[CSVの並び順], bonus:[CSVの並び順] }(数字は補完・並べ替えをしない)
+  function validateCsv(text, def) {
+    def = def || DEF;
+    var errors = [], list = [];
+    function err(msg) { errors.push(msg); }
+    var rows = parseCsv(text), HEAD = def.csvHeader, MAX = def.max;
+    if (!rows.length) return { errors: ['ファイルが空です。'], list: [], dataRows: 0 };
+    var head = rows[0].map(function (h) { return h.replace(/^\uFEFF/, '').trim(); });
+    if (head.length !== HEAD.length) {
+      return { errors: ['1行目(見出し)の列数が違います(' + head.length + '列。正しくは' + HEAD.length + '列)。'], list: [], dataRows: 0 };
+    }
+    var badHead = [];
+    HEAD.forEach(function (h, i) { if (head[i] !== h) badHead.push((i + 1) + '列目「' + head[i] + '」(正しくは「' + h + '」)'); });
+    if (badHead.length) {
+      return { errors: ['1行目(見出し)が想定と違います:' + badHead.slice(0, 3).join('、') + (badHead.length > 3 ? ' ほか' : '') +
+        '。文字コードがCP932(Shift_JIS)またはUTF-8のCSVか確認してください。'], list: [], dataRows: 0 };
+    }
+    if (rows.length < 2) return { errors: ['抽選履歴の行がありません(見出しのみ)。'], list: [], dataRows: 0 };
+
+    var seen = {}, intRe = /^\d+$/, mainEnd = 1 + def.mainCount, bonusEnd = mainEnd + def.bonusCount;
+    for (var r = 1; r < rows.length; r++) {
+      var f = rows[r].map(function (v) { return v.trim(); }), at = r + 1 + '行目:', bad = false;
+      if (f.length !== HEAD.length) { err(at + '列数が' + f.length + '列です(正しくは' + HEAD.length + '列)。'); continue; }
+      if (!intRe.test(f[0]) || +f[0] < 1) { err(at + '開催回「' + f[0] + '」が正しくありません。'); continue; }
+      var round = +f[0];
+      if (seen[round]) { err(at + '開催回' + round + 'が重複しています(' + seen[round] + '行目と同じ)。'); continue; }
+      seen[round] = r + 1;
+      var date = parseDate(f[1]);
+      if (!date) { err(at + '第' + round + '回の開催日「' + f[1] + '」を読み取れません(例:2024/4/5)。'); bad = true; }
+      var nums = {}, bonus = {}, main = [], bon = [], k, v;
+      for (k = 2; k <= mainEnd; k++) {
+        v = f[k];
+        if (!intRe.test(v) || +v < 1 || +v > MAX) { err(at + '第' + round + '回の' + HEAD[k] + '「' + v + '」は1〜' + MAX + 'の数字ではありません。'); bad = true; continue; }
+        if (nums[+v]) { err(at + '第' + round + '回の本数字に' + v + 'が重複しています。'); bad = true; continue; }
+        nums[+v] = true; main.push(+v);
+      }
+      for (k = mainEnd + 1; k <= bonusEnd; k++) {
+        v = f[k];
+        if (!intRe.test(v) || +v < 1 || +v > MAX) { err(at + '第' + round + '回の' + HEAD[k] + '「' + v + '」は1〜' + MAX + 'の数字ではありません。'); bad = true; continue; }
+        if (nums[+v] || bonus[+v]) { err(at + '第' + round + '回のボーナス数字' + v + 'が、本数字または他のボーナス数字と重複しています。'); bad = true; continue; }
+        bonus[+v] = true; bon.push(+v);
+      }
+      if (!bad) list.push({ round: round, date: date, main: main, bonus: bon });
+    }
+    list.sort(function (a, b) { return a.round - b.round; });
+    return { errors: errors, list: list, dataRows: rows.length - 1 };
+  }
+
+  // ---- 内蔵データJSONの生成(現在の default-data.json と同じ構造・同じ書式: 1回1行) ----
+  // list は validateCsv の結果(errors が空)。sourceName は読み込んだCSVのファイル名。戻り値は JSON のテキスト
+  function buildJson(list, sourceName, def) {
+    def = def || DEF;
+    var sorted = list.slice().sort(function (a, b) { return a.round - b.round; });
+    if (!sorted.length) throw new Error('抽選履歴が空のため、JSONを作成できません。');
+    var latest = sorted[sorted.length - 1];
+    var lines = sorted.map(function (d) {
+      return '        {"round": ' + d.round + ', "date": ' + JSON.stringify(d.date) +
+        ', "main": [' + d.main.join(', ') + '], "bonus": [' + d.bonus.join(', ') + ']}';
+    });
+    return '{\n' +
+      '  "schemaVersion": 1,\n' +
+      '  "lotteries": {\n' +
+      '    ' + JSON.stringify(def.id) + ': {\n' +
+      '      "source": ' + JSON.stringify(sourceName) + ',\n' +
+      '      "count": ' + sorted.length + ',\n' +
+      '      "latestRound": ' + latest.round + ',\n' +
+      '      "latestDate": ' + JSON.stringify(latest.date) + ',\n' +
+      '      "draws": [\n' + lines.join(',\n') + '\n' +
+      '      ]\n' +
+      '    }\n' +
+      '  }\n' +
+      '}\n';
+  }
+
+  // ---- 画面 ----
+  var $ = function (id) { return document.getElementById(id); };
+  var MAX_ERR_SHOWN = 20;
+  var state = { fileName: '', encoding: '', result: null, json: '' };
+
+  function fmtSize(n) { return n < 1024 ? n + ' B' : (n < 1048576 ? (n / 1024).toFixed(1) + ' KB' : (n / 1048576).toFixed(2) + ' MB'); }
+  function clear(el) { while (el.firstChild) el.removeChild(el.firstChild); }
+  function badge(cls, text) { var s = document.createElement('span'); s.className = 'status ' + cls; s.textContent = text; return s; }
+  function balls(el, nums, cls) {
+    clear(el);
+    nums.forEach(function (n) { var b = document.createElement('span'); b.className = 'ball' + (cls ? ' ' + cls : ''); b.textContent = String(n); el.appendChild(b); });
+  }
+
+  function reset() {
+    state.fileName = ''; state.encoding = ''; state.result = null; state.json = '';
+    $('fileinfo').hidden = true; $('sec-latest').hidden = true; $('sec-json').hidden = true;
+  }
+
+  function showFileInfo(file, encoding, rows) {
+    $('fi-name').textContent = file.name;
+    $('fi-size').textContent = fmtSize(file.size);
+    $('fi-enc').textContent = encoding || '(判定できませんでした)';
+    $('fi-rows').textContent = rows == null ? '-' : rows + ' 行';
+    $('fileinfo').hidden = false;
+  }
+
+  function showError(lines, title) {
+    var box = $('result'); clear(box); box.className = '';
+    box.appendChild(badge('ng', title || 'エラーがあります'));
+    var ul = document.createElement('ul'); ul.className = 'errs';
+    lines.forEach(function (m) { var li = document.createElement('li'); li.textContent = m; ul.appendChild(li); });
+    box.appendChild(ul);
+    var p = document.createElement('p'); p.className = 'muted'; p.textContent = 'エラーがあるため、JSONは作成できません。CSVを直して、もう一度選んでください。';
+    box.appendChild(p);
+  }
+
+  function handleFile(file) {
+    reset();
+    if (!file) { var b = $('result'); clear(b); b.className = 'muted'; b.textContent = 'CSVを選ぶと、ここに検証結果が表示されます。'; return; }
+    if (file.size > MAX_CSV_BYTES) {
+      showFileInfo(file, '', null);
+      showError(['ファイルが大きすぎます(5MBまで)。'], '読み込めませんでした');
+      return;
+    }
+    var reader = new FileReader();
+    reader.onerror = function () { showFileInfo(file, '', null); showError(['ファイルを読み取れませんでした。'], '読み込めませんでした'); };
+    reader.onload = function () {
+      var dec, res;
+      try { dec = decodeCsv(reader.result); res = validateCsv(dec.text, DEF); }
+      catch (e) { showFileInfo(file, '', null); showError([e.message], '読み込めませんでした'); return; }
+      state.fileName = file.name; state.encoding = dec.encoding; state.result = res;
+      showFileInfo(file, dec.encoding, res.dataRows || null);
+      if (res.errors.length) {
+        var lines = res.errors.slice(0, MAX_ERR_SHOWN);
+        if (res.errors.length > MAX_ERR_SHOWN) lines.push('ほか' + (res.errors.length - MAX_ERR_SHOWN) + '件のエラーがあります。');
+        showError(lines, 'CSVに問題があります(' + res.errors.length + '件)');
+        return;
+      }
+      var list = res.list, first = list[0], latest = list[list.length - 1];
+      var box = $('result'); clear(box); box.className = '';
+      box.appendChild(badge('ok', '問題なし'));
+      var p = document.createElement('p'); p.style.margin = '6px 0 0';
+      p.textContent = list.length + '回分(第' + first.round + '〜' + latest.round + '回)を読み取りました。';
+      box.appendChild(p);
+      $('lt-round').textContent = '第' + latest.round + '回';
+      $('lt-date').textContent = latest.date;
+      $('lt-range').textContent = list.length + '回分(第' + first.round + '〜' + latest.round + '回)';
+      balls($('lt-main'), latest.main, '');
+      balls($('lt-bonus'), latest.bonus, 'bonus');
+      $('sec-latest').hidden = false;
+      // JSONは内部で生成する(ダウンロードの画面は次の段階で追加)
+      try {
+        state.json = buildJson(list, file.name, DEF);
+        $('json-info').textContent = 'JSONを内部で生成しました(' + list.length + '回分・' + state.json.length.toLocaleString('ja-JP') + '文字)。ダウンロードの画面は、次の段階で追加します。';
+      } catch (e3) { state.json = ''; $('json-info').textContent = e3.message; }
+      $('sec-json').hidden = false;
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  $('csv-input').addEventListener('change', function () { handleFile(this.files && this.files[0]); });
+
+  // 検証用の入口(画面の動作には使わない。自動テストが、画面と同じ関数を直接呼ぶために公開する)
+  window.CaptainTool = {
+    defs: LOTTERY_DEFS, decodeCsv: decodeCsv, parseCsv: parseCsv, parseDate: parseDate,
+    validateCsv: validateCsv, buildJson: buildJson, state: state
+  };
+})();
+</script>
+</body>
+</html>
