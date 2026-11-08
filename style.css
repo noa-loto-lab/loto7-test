@@ -167,7 +167,7 @@ body { position: fixed; inset: 0; width: 100%; }
   color: #3f2922;
   font-size: 15px;
   font-weight: 600;
-  letter-spacing: .02em;
+  letter-spacing: .05em;
   line-height: 1;
   white-space: nowrap;
   overflow: hidden;
@@ -176,17 +176,6 @@ body { position: fixed; inset: 0; width: 100%; }
   position: relative;
   display: inline-block;
   font-family: 'Noto Serif JP', serif;
-}
-#app-title > span::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: -4px;
-  height: 2px;
-  border-radius: 2px;
-  background: var(--accent);
-  pointer-events: none;
 }
 
 /* ---- A. 操作バー(アイコンのみ) ---- */
