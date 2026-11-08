@@ -175,7 +175,8 @@ body { position: fixed; inset: 0; width: 100%; }
 #app-title > span {
   position: relative;
   display: inline-block;
-  font-family: 'RocknRoll One', sans-serif;
+  font-family: 'Reggae One', sans-serif;
+  color: #963b28;
 }
 #app-title > span::after {
   content: "";
@@ -185,7 +186,8 @@ body { position: fixed; inset: 0; width: 100%; }
   bottom: -4px;
   height: 3px;
   border-radius: 2px;
-  background: #f5b700;
+  background: #e87822;
+  box-shadow: 0 5px 0 #159b91;
   pointer-events: none;
 }
 
