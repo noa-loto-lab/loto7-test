@@ -157,14 +157,14 @@ body { position: fixed; inset: 0; width: 100%; }
   box-shadow: inset 0 0 0 max(1px, calc(2px * var(--z))) var(--sel-ink);   /* 色だけに頼らず、枠でも区別 */
 }
 
-/* ---- アプリタイトル: RocknRoll One。文字サイズ・行の高さ・配置は従来どおり ---- */
+/* ---- アプリタイトル: シンプル・おしゃれ系。寸法・文字サイズ・行の高さは従来どおり ---- */
 #app-title {
   display: flex;
   align-items: center;
   min-width: 0;
   padding: 3px 10px 0;
   background: var(--paper);
-  color: var(--ink);
+  color: #3f2922;
   font-size: 15px;
   font-weight: 600;
   letter-spacing: .02em;
@@ -175,8 +175,7 @@ body { position: fixed; inset: 0; width: 100%; }
 #app-title > span {
   position: relative;
   display: inline-block;
-  font-family: 'Reggae One', sans-serif;
-  color: #963b28;
+  font-family: 'Noto Serif JP', serif;
 }
 #app-title > span::after {
   content: "";
@@ -184,10 +183,9 @@ body { position: fixed; inset: 0; width: 100%; }
   left: 0;
   right: 0;
   bottom: -4px;
-  height: 3px;
+  height: 2px;
   border-radius: 2px;
-  background: #e87822;
-  box-shadow: 0 5px 0 #159b91;
+  background: var(--accent);
   pointer-events: none;
 }
 
