@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>保存領域チェック(読み取り専用)</title>
+<style>
+  /* 診断用の一時ページ。予想ツール本体(index.html / style.css / app.js)は読み込まない */
+  :root { --bg:#f6f6f4; --card:#fff; --ink:#1d1d1f; --sub:#6b6b70; --line:#e2e2e0; --ok:#1f7a3a; --ng:#b3261e; --warn:#8a5a00; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#161617; --card:#232325; --ink:#f2f2f3; --sub:#a0a0a6; --line:#3a3a3d; --ok:#6fd08c; --ng:#ff8a80; --warn:#f0c060; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+         font:15px/1.55 -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", sans-serif;
+         padding: max(12px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom)); }
+  h1 { font-size:18px; margin:4px 0 2px; }
+  .lead { color:var(--sub); font-size:13px; margin:0 0 12px; }
+  .bar { display:flex; gap:8px; margin:0 0 12px; flex-wrap:wrap; }
+  button { font:inherit; font-size:14px; padding:8px 14px; border-radius:8px; border:1px solid var(--line);
+           background:var(--card); color:var(--ink); }
+  section { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:10px 12px; margin:0 0 12px; }
+  h2 { font-size:15px; margin:2px 0 8px; }
+  h3 { font-size:14px; margin:12px 0 4px; color:var(--sub); }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th, td { text-align:left; vertical-align:top; padding:5px 4px; border-top:1px solid var(--line); word-break:break-all; }
+  th { width:42%; font-weight:600; color:var(--sub); }
+  .ok { color:var(--ok); font-weight:600; } .ng { color:var(--ng); font-weight:600; } .warn { color:var(--warn); font-weight:600; }
+  code { font-family: ui-monospace, Menlo, monospace; font-size:12px; }
+  #status { font-size:13px; color:var(--sub); margin:0 0 10px; }
+</style>
+</head>
+<body>
+<h1>保存領域チェック(読み取り専用)</h1>
+<p class="lead">このページは保存データを読むだけで、書き込み・削除・変更は行いません。抽選数字・予想数字は表示しません。</p>
+<div class="bar">
+  <button type="button" id="rerun">もう一度確認する</button>
+  <button type="button" id="copy">結果をテキストでコピー</button>
+</div>
+<p id="status">確認中…</p>
+<div id="out"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  // ============================================================
+  // 読み取り専用の診断ページ
+  //  - IndexedDB: indexedDB.databases() で存在を確認できたDBだけを、バージョン指定なしで開く
+  //               (バージョン指定なし=既存のバージョンのまま開く。バージョン変更・ストア追加は起きない)
+  //               万一「新規作成」の処理(onupgradeneeded)が走った場合は、その場で取り消して作成させない
+  //               トランザクションは 'readonly' のみ。読み終えたら必ず close する
+  //  - localStorage: key() と getItem() で読むだけ(setItem / removeItem / clear は使わない)
+  //  - navigator.storage: estimate() と persisted() だけ(persist() は呼ばない)
+  //  - 数字の中身は表示しない。件数・項目名・型だけを表示する
+  // ============================================================
+
+  var KNOWN = {
+    'loto7-prediction': { draws: 'draws', kv: 'kv' },
+    'loto7-memo': { memos: 'memos', meta: 'meta' }
+  };
+  var out = document.getElementById('out');
+  var statusEl = document.getElementById('status');
+  var report = [];   // コピー用のテキスト
+
+  function h(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text !== undefined) e.textContent = text;
+    return e;
+  }
+  function section(title) {
+    var s = h('section'); s.appendChild(h('h2', '', title)); out.appendChild(s);
+    report.push('', '■ ' + title);
+    return s;
+  }
+  function sub(s, title) { s.appendChild(h('h3', '', title)); report.push('  [' + title + ']'); }
+  // rows: [[項目, 値, 色クラス?], ...]
+  function table(s, rows) {
+    var t = h('table');
+    rows.forEach(function (r) {
+      var tr = h('tr'), th = h('th', '', r[0]), td = h('td', r[2] || '', r[1]);
+      tr.appendChild(th); tr.appendChild(td); t.appendChild(tr);
+      report.push('  ' + r[0] + ': ' + r[1]);
+    });
+    s.appendChild(t);
+  }
+  function typeOf(v) {
+    if (v === null) return 'null';
+    if (Array.isArray(v)) return 'array';
+    return typeof v;
+  }
+  function fmtBytes(n) {
+    if (typeof n !== 'number' || !isFinite(n)) return '不明';
+    if (n < 1024) return n + ' B';
+    if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+    if (n < 1024 * 1024 * 1024) return (n / 1024 / 1024).toFixed(2) + ' MB';
+    return (n / 1024 / 1024 / 1024).toFixed(2) + ' GB';
+  }
+  function countMap(m) {   // {名前: 件数} → '名前=件数, …'
+    var k = Object.keys(m).sort();
+    return k.length ? k.map(function (x) { return x + ' = ' + m[x]; }).join('、') : 'なし';
+  }
+  // 項目名と型の集計 {項目名: {型: 件数}} → 'round(number)×702、…'
+  function fieldsText(f) {
+    var k = Object.keys(f).sort();
+    if (!k.length) return 'なし';
+    return k.map(function (name) {
+      return name + '(' + Object.keys(f[name]).sort().map(function (t) { return t + '×' + f[name][t]; }).join(' / ') + ')';
+    }).join('、');
+  }
+  function addFields(f, obj) {
+    if (!obj || typeof obj !== 'object') { (f['(値がオブジェクトでない)'] = f['(値がオブジェクトでない)'] || {})[typeOf(obj)] = ((f['(値がオブジェクトでない)'] || {})[typeOf(obj)] || 0) + 1; return; }
+    Object.keys(obj).forEach(function (k) {
+      var t = typeOf(obj[k]);
+      f[k] = f[k] || {};
+      f[k][t] = (f[k][t] || 0) + 1;
+    });
+  }
+
+  // ---- 既存DBだけを開く(新規作成しない) ----
+  function openExisting(name) {
+    return new Promise(function (resolve, reject) {
+      var req;
+      try { req = indexedDB.open(name); } catch (e) { reject(e); return; }   // バージョン指定なし
+      var created = false;
+      req.onupgradeneeded = function () {
+        // ここに来るのは「DBが存在しなかった」場合だけ。作成を取り消して、何も残さない
+        created = true;
+        try { req.transaction.abort(); } catch (_) {}
+      };
+      req.onsuccess = function () {
+        var d = req.result;
+        if (created) { try { d.close(); } catch (_) {} reject(new Error('DBが存在しないため開きませんでした')); return; }
+        d.onversionchange = function () { try { d.close(); } catch (_) {} };   // 予想ツール側の更新を邪魔しない
+        resolve(d);
+      };
+      req.onerror = function () {
+        reject(created ? new Error('DBが存在しないため開きませんでした(作成は取り消し済み)') : (req.error || new Error('開けませんでした')));
+      };
+      req.onblocked = function () { reject(new Error('他の画面が使用中のため開けませんでした')); };
+    });
+  }
+
+  // ストア全件をカーソルで読み、fn(key, value) に渡す(readonly)
+  function scan(d, storeName, fn) {
+    return new Promise(function (resolve, reject) {
+      var tx;
+      try { tx = d.transaction([storeName], 'readonly'); } catch (e) { reject(e); return; }
+      var st = tx.objectStore(storeName);
+      var info = { keyPath: st.keyPath, autoIncrement: st.autoIncrement, indexes: Array.prototype.slice.call(st.indexNames) };
+      var rq = st.openCursor();
+      rq.onsuccess = function (e) {
+        var c = e.target.result;
+        if (!c) return;
+        try { fn(c.primaryKey, c.value); } catch (_) {}
+        c.continue();
+      };
+      tx.oncomplete = function () { resolve(info); };
+      tx.onerror = tx.onabort = function () { reject(tx.error || new Error('読み出し失敗')); };
+    });
+  }
+  function keyPathText(kp) {
+    if (kp === null || kp === undefined) return 'なし(外部キー)';
+    return Array.isArray(kp) ? '[' + kp.join(', ') + ']' : String(kp);
+  }
+
+  // ---- 抽選データDB ----
+  function checkPrediction(d, s) {
+    var drawCount = 0, byLot = {}, drawFields = {};
+    var kvKeys = [], kvFields = {}, metaInfo = {};
+    return scan(d, 'draws', function (k, v) {
+      drawCount++;
+      var lot = v && typeof v.lottery === 'string' ? v.lottery : '(lotteryなし)';
+      byLot[lot] = (byLot[lot] || 0) + 1;
+      addFields(drawFields, v);
+    }).then(function (info) {
+      sub(s, 'ストア draws(抽選データ)');
+      table(s, [
+        ['キー構造', keyPathText(info.keyPath) + (info.autoIncrement ? '(自動採番)' : '')],
+        ['インデックス', info.indexes.length ? info.indexes.join('、') : 'なし'],
+        ['保存件数', drawCount + '件'],
+        ['くじ種別ごとの件数', countMap(byLot)],
+        ['項目名(型×件数)', fieldsText(drawFields)]
+      ]);
+      return scan(d, 'kv', function (k, v) {
+        kvKeys.push(String(k));
+        addFields(kvFields, v);
+        // 読み込み元の情報(meta:種別)だけは、どの画面が保存したかの比較用に、数字以外の項目を表示する
+        if (/^meta:/.test(String(k)) && v && typeof v === 'object') {
+          metaInfo[String(k)] = [
+            '読み込み方法=' + (typeof v.kind === 'string' ? v.kind : '記録なし'),
+            '収録回数=' + (typeof v.count === 'number' ? v.count : '記録なし'),
+            '保存日時=' + (typeof v.savedAt === 'number' ? new Date(v.savedAt).toLocaleString('ja-JP') : '記録なし')
+          ].join('、');
+        }
+      });
+    }).then(function (info) {
+      sub(s, 'ストア kv(読み込み元情報・選択数字)');
+      var rows = [
+        ['キー構造', keyPathText(info.keyPath)],
+        ['保存件数', kvKeys.length + '件'],
+        ['キー名', kvKeys.length ? kvKeys.sort().join('、') : 'なし'],
+        ['項目名(型×件数)', fieldsText(kvFields)]
+      ];
+      Object.keys(metaInfo).sort().forEach(function (k) { rows.push([k + ' の内容', metaInfo[k]]); });
+      table(s, rows);
+    });
+  }
+
+  // ---- 予想メモDB ----
+  function checkMemo(d, s) {
+    var n = 0, withLot = 0, withoutLot = 0, byLot = {}, byLotTarget = {}, fields = {};
+    var metaKeys = [];
+    return scan(d, 'memos', function (k, v) {
+      n++;
+      var has = !!v && typeof v === 'object' && Object.prototype.hasOwnProperty.call(v, 'lottery');
+      if (has) withLot++; else withoutLot++;
+      var lot = has ? String(v.lottery) : '(lotteryなし)';
+      byLot[lot] = (byLot[lot] || 0) + 1;
+      var tg = v && typeof v.target === 'string' ? v.target : '(targetなし)';
+      var key = lot + ' / ' + tg;
+      byLotTarget[key] = (byLotTarget[key] || 0) + 1;
+      addFields(fields, v);
+    }).then(function (info) {
+      sub(s, 'ストア memos(予想メモ)');
+      table(s, [
+        ['キー構造', keyPathText(info.keyPath) + (info.autoIncrement ? '(自動採番)' : '')],
+        ['インデックス', info.indexes.length ? info.indexes.join('、') : 'なし'],
+        ['保存件数', n + '件'],
+        ['lotteryがあるメモ', withLot + '件'],
+        ['lotteryがないメモ', withoutLot + '件', withoutLot ? 'warn' : 'ok'],
+        ['くじ種別ごとの件数', countMap(byLot)],
+        ['種別 / 対象回ごとの件数', countMap(byLotTarget)],
+        ['項目名(型×件数)', fieldsText(fields)]
+      ]);
+      return scan(d, 'meta', function (k) { metaKeys.push(String(k)); });
+    }).then(function (info) {
+      sub(s, 'ストア meta(予想番号カウンタ)');
+      table(s, [
+        ['キー構造', keyPathText(info.keyPath)],
+        ['保存件数', metaKeys.length + '件'],
+        ['キー名', metaKeys.length ? metaKeys.sort().join('、') : 'なし']
+      ]);
+    });
+  }
+
+  function checkOneDb(name, version) {
+    var s = section('IndexedDB:' + name);
+    return openExisting(name).then(function (d) {
+      var stores = Array.prototype.slice.call(d.objectStoreNames);
+      table(s, [
+        ['データベース名', d.name],
+        ['バージョン', String(d.version)],
+        ['オブジェクトストア', stores.length ? stores.join('、') : 'なし']
+      ]);
+      var plan = KNOWN[name], p = Promise.resolve();
+      if (name === 'loto7-prediction' && stores.indexOf('draws') >= 0 && stores.indexOf('kv') >= 0) p = checkPrediction(d, s);
+      else if (name === 'loto7-memo' && stores.indexOf('memos') >= 0 && stores.indexOf('meta') >= 0) p = checkMemo(d, s);
+      else if (plan) table(s, [['注意', '想定していたストアがそろっていないため、中身は確認していません', 'warn']]);
+      return p.then(function () { d.close(); }, function (e) { d.close(); table(s, [['読み出しエラー', String(e && e.message || e), 'ng']]); });
+    }, function (e) {
+      table(s, [['データベース名', name], ['一覧上のバージョン', String(version)], ['開けませんでした', String(e && e.message || e), 'ng']]);
+    });
+  }
+
+  function checkIndexedDb() {
+    var s = section('IndexedDB の一覧');
+    if (!('indexedDB' in window) || !window.indexedDB) {
+      table(s, [['IndexedDB', '利用できません', 'ng']]);
+      return Promise.resolve();
+    }
+    if (typeof indexedDB.databases !== 'function') {
+      table(s, [['IndexedDB', '利用できます', 'ok'],
+                ['DB一覧(indexedDB.databases)', 'この環境では使えないため確認不可(DBは開いていません)', 'warn']]);
+      return Promise.resolve();
+    }
+    return indexedDB.databases().then(function (list) {
+      list = (list || []).filter(function (x) { return x && x.name; });
+      table(s, [
+        ['IndexedDB', '利用できます', 'ok'],
+        ['存在するDB', list.length ? list.map(function (x) { return x.name + '(version ' + x.version + ')'; }).join('、') : 'なし'],
+        ['loto7-prediction', list.some(function (x) { return x.name === 'loto7-prediction'; }) ? 'あり' : 'なし'],
+        ['loto7-memo', list.some(function (x) { return x.name === 'loto7-memo'; }) ? 'あり' : 'なし']
+      ]);
+      // 予想ツールのDBだけを詳しく見る(他のDBは名前とバージョンだけ)
+      var targets = list.filter(function (x) { return KNOWN[x.name]; });
+      return targets.reduce(function (p, x) { return p.then(function () { return checkOneDb(x.name, x.version); }); }, Promise.resolve());
+    }, function (e) {
+      table(s, [['DB一覧(indexedDB.databases)', '取得に失敗したため確認不可(DBは開いていません):' + String(e && e.message || e), 'warn']]);
+    });
+  }
+
+  function checkLocalStorage() {
+    var s = section('localStorage');
+    var ls;
+    try { ls = window.localStorage; } catch (e) { table(s, [['localStorage', '利用できません(' + e.message + ')', 'ng']]); return; }
+    if (!ls) { table(s, [['localStorage', '利用できません', 'ng']]); return; }
+    var keys = [];
+    try { for (var i = 0; i < ls.length; i++) keys.push(ls.key(i)); }
+    catch (e2) { table(s, [['localStorage', 'キーを読めませんでした(' + e2.message + ')', 'ng']]); return; }
+    keys.sort();
+    var rows = [['localStorage', '利用できます', 'ok'], ['キーの数', keys.length + '件']];
+    keys.forEach(function (k) {
+      var v = null;
+      try { v = ls.getItem(k); } catch (_) {}
+      rows.push([k, v === null ? '値なし' : '値あり(' + v.length + '文字)']);   // 値そのものは表示しない
+    });
+    ['loto7.colors', 'loto7.zoom', 'loto7.showRounds'].forEach(function (k) {
+      if (keys.indexOf(k) < 0) rows.push([k, '存在しません']);
+    });
+    table(s, rows);
+  }
+
+  function checkEnv() {
+    var s = section('画面環境');
+    var standalone = (window.navigator.standalone === true) ||
+      (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+    table(s, [
+      ['URL', location.href],
+      ['origin', location.origin],
+      ['表示モード', standalone ? 'ホーム画面アプリ(standalone)' : 'ブラウザ(Safariなど)'],
+      ['確認日時', new Date().toLocaleString('ja-JP')],
+      ['ブラウザ情報', navigator.userAgent]
+    ]);
+  }
+
+  function checkStorageApi() {
+    var s = section('保存領域について');
+    var rows = [];
+    var st = navigator.storage;
+    var p1 = (st && typeof st.estimate === 'function')
+      ? st.estimate().then(function (e) {
+          rows.push(['使用量(目安)', fmtBytes(e.usage)]);
+          rows.push(['容量(目安)', fmtBytes(e.quota)]);
+          if (e.usageDetails && typeof e.usageDetails === 'object') rows.push(['内訳', Object.keys(e.usageDetails).map(function (k) { return k + ' ' + fmtBytes(e.usageDetails[k]); }).join('、') || 'なし']);
+        }, function (e) { rows.push(['estimate()', '失敗:' + String(e && e.message || e), 'warn']); })
+      : Promise.resolve(rows.push(['estimate()', 'この環境では使えないため確認不可', 'warn']));
+    return p1.then(function () {
+      if (st && typeof st.persisted === 'function') {
+        return st.persisted().then(function (v) {
+          rows.push(['永続化(persisted)', v ? 'はい(自動削除されにくい状態)' : 'いいえ(容量不足などで消される可能性あり)', v ? 'ok' : 'warn']);
+        }, function (e) { rows.push(['persisted()', '失敗:' + String(e && e.message || e), 'warn']); });
+      }
+      rows.push(['persisted()', 'この環境では使えないため確認不可', 'warn']);
+    }).then(function () { table(s, rows); });
+  }
+
+  function run() {
+    out.textContent = '';
+    report = ['保存領域チェック(読み取り専用)'];
+    statusEl.textContent = '確認中…';
+    checkEnv();
+    checkLocalStorage();
+    checkStorageApi()
+      .then(checkIndexedDb)
+      .then(function () { statusEl.textContent = '確認が終わりました(' + new Date().toLocaleTimeString('ja-JP') + ')。保存データは変更していません。'; },
+            function (e) { statusEl.textContent = '途中でエラーが起きました:' + String(e && e.message || e); });
+  }
+
+  document.getElementById('rerun').addEventListener('click', run);
+  document.getElementById('copy').addEventListener('click', function () {
+    var text = report.join('\n');
+    function done(ok) { statusEl.textContent = ok ? '結果をコピーしました。' : 'コピーできませんでした。画面を長押しして選択してください。'; }
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(function () { done(true); }, function () { done(false); });
+    else done(false);
+  });
+  run();
+})();
+</script>
+</body>
+</html>
