@@ -482,6 +482,10 @@ body { position: fixed; inset: 0; width: 100%; }
 .sp-item-2 .sp-item-main { font-size: 15px; font-weight: 700; }
 .sp-item-2 .sp-item-sub { font-size: 11px; font-weight: 500; opacity: .75; }
 .sp-info { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; font-size: 12px; line-height: 1.4; background: var(--paper-alt); border: 1px dashed var(--line); border-radius: 8px; }
+.sp-note { padding: 0 2px; font-size: 12px; line-height: 1.5; color: var(--ink); }
+.sp-note p { margin: 0 0 4px; }
+.sp-note p:last-child { margin-bottom: 0; }
+.sp-note-check { font-weight: 800; }
 .sp-info-row { display: flex; gap: 8px; }
 .sp-info-k { flex: 0 0 5.5em; font-weight: 800; }
 .sp-info-v { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
