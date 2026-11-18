@@ -46,20 +46,24 @@
         <button type="button" data-n="50" aria-pressed="false">50回</button>
       </div>
     </div>
-    <button id="csv-btn" class="sp-item" type="button">ロト7 CSV読み込み・更新</button>
-    <button id="builtin-btn" class="sp-item sp-item-2" type="button"><span class="sp-item-main">内蔵データを読み込む</span><span class="sp-item-sub">アプリ内蔵の抽選データで置き換え(確認あり)</span></button>
-    <!-- 上段:内蔵データについて(説明と、default-data.json から取得した最新回) -->
-    <section class="sp-block sp-block-builtin" aria-labelledby="sp-builtin-title">
-      <h2 id="sp-builtin-title" class="sp-block-title">内蔵データについて</h2>
-      <p class="sp-block-text">内蔵データは随時更新していますが、最新回まで収録されているとは限りません。</p>
-      <p id="builtin-latest" class="sp-builtin-latest" aria-live="polite">内蔵データの最新回を確認中…</p>
-    </section>
-    <!-- 下段:現在使用中の抽選データ(読み込み情報欄は従来どおり app.js が表示) -->
+    <!-- 抽選データ:①現在使用中の抽選データ(読み込み情報欄は従来どおり app.js が表示) -->
     <section class="sp-block sp-block-current" aria-labelledby="sp-current-title">
       <h2 id="sp-current-title" class="sp-block-title">現在使用中の抽選データ</h2>
-      <p class="sp-block-text">下に表示されている内容が、現在ツールで使用している抽選データです。最新回や収録回数を確認してください。</p>
       <div id="data-info" class="sp-info" aria-label="現在の抽選データ"><div class="sp-info-row"><span class="sp-info-k">抽選データ</span><span class="sp-info-v">確認中…</span></div></div>
     </section>
+    <hr class="sp-sep">
+    <!-- ②抽選データの選択(ボタンの処理は既存のまま)/ ③内蔵データについて(最新回は default-data.json から取得) -->
+    <div class="sp-group" role="group" aria-labelledby="sp-source-label">
+      <span id="sp-source-label" class="sp-label">抽選データの選択</span>
+      <div class="sp-choice">
+        <button id="csv-btn" class="sp-item" type="button">CSV読み込み</button>
+        <button id="builtin-btn" class="sp-item" type="button">内蔵データ読み込み</button>
+      </div>
+      <div class="sp-builtin-note" aria-label="内蔵データについて">
+        <p id="builtin-latest" class="sp-builtin-latest" aria-live="polite">内蔵データの最新回を確認中…</p>
+        <p class="sp-builtin-text"><span>内蔵データは随時更新しています。</span><span>最新回の反映まで時間がかかる場合があります。</span><span>更新を希望する場合は、ツール作成者にお知らせください。</span></p>
+      </div>
+    </div>
     <button id="color-btn" class="sp-item" type="button" aria-expanded="false" aria-controls="color-panel">色設定</button>
     <!-- 一時的な診断用リンク(テスト版のみ)。読み取り専用の storage-check.html を同じウィンドウで開く。診断が終わったらこの1行を削除する -->
     <a id="storage-check-link" class="sp-item" href="storage-check.html" style="display:flex; align-items:center; flex-shrink:0; box-sizing:border-box; text-decoration:none;">保存領域チェック（一時）</a>
