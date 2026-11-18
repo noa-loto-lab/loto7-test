@@ -480,14 +480,17 @@ body { position: fixed; inset: 0; width: 100%; }
 .sp-item-2 .sp-item-main { font-size: 15px; font-weight: 700; }
 .sp-item-2 .sp-item-sub { font-size: 11px; font-weight: 500; opacity: .75; }
 .sp-info { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; font-size: 12px; line-height: 1.4; background: var(--paper-alt); border: 1px dashed var(--line); border-radius: 8px; }
-.sp-note { padding: 0 2px; font-size: 12px; line-height: 1.5; color: var(--ink); }
-.sp-note p { margin: 0 0 4px; }
-.sp-note p:last-child { margin-bottom: 0; }
-.sp-note-check { font-weight: 800; }
+/* 説明エリア:上段「内蔵データについて」/ 下段「現在使用中の抽選データ」。既存の紙色・線色だけで区別する */
+.sp-block { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px 10px; border: 1px solid var(--line); border-radius: 8px; color: var(--ink); }
+.sp-block-builtin { background: var(--paper); }
+.sp-block-current { background: var(--paper-alt); }
+.sp-block-current .sp-info { margin-top: 2px; background: var(--paper); }   /* 下段の背景と区別するため、情報欄は明るい紙色 */
+.sp-block-title { margin: 0 0 2px; padding-left: 7px; border-left: 3px solid var(--ink); font-size: 13px; font-weight: 800; line-height: 1.3; }
+.sp-block-text { margin: 0; font-size: 12px; line-height: 1.5; }
 .sp-info-row { display: flex; gap: 8px; }
 .sp-info-k { flex: 0 0 6.5em; white-space: nowrap; font-weight: 800; }   /* 項目名は1行(最長6文字)。長い値は値側で折り返す */
 .sp-info-v { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
-.sp-builtin-latest { margin: -4px 0 0; padding: 0 2px; font-size: 12px; font-weight: 700; line-height: 1.4; color: var(--ink); }   /* 内蔵データファイルの最新回(現在の抽選データとは別) */
+.sp-builtin-latest { margin: 0; font-size: 12px; font-weight: 800; line-height: 1.4; color: var(--ink); }   /* 内蔵データファイルの最新回(現在の抽選データとは別) */
 
 /* 予想メモ: 開いている回をまとめて削除 */
 #memo-del-all { height: 32px; padding: 0 10px; font: inherit; font-size: 12px; font-weight: 700; color: #a11a1a; background: var(--paper-alt); border: 1px solid #a11a1a; border-radius: 16px; touch-action: manipulation; }
