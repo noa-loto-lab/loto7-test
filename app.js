@@ -856,6 +856,7 @@
       askConfirm('内蔵データで置き換えますか?', text, '置き換える', 'primary').then(function (ok) {
         builtinLoading = false;
         if (ok) runBuiltin();
+        else setSettings(true);   // キャンセル時は設定画面に戻る(読み込み・保存は行わない)
       });
     } else {
       runBuiltin();
@@ -910,6 +911,33 @@
 
   builtinBtn.addEventListener('click', function () { setSettings(false); loadBuiltin(); });
 
+  // ---- 設定パネルの「内蔵データの最新回」案内 ----
+  // 表示専用。default-data.json を読むだけで、現在の抽選データ・保存内容・builtinLoading/busy には一切触れない。
+  // 設定パネルを開くたびに取得し直すので、default-data.json が更新されれば表示も追従する。検証は読み込み時と同じ validateBuiltin。
+  var builtinLatestEl = document.getElementById('builtin-latest');
+  var builtinLatestSeq = 0;   // 古い取得結果で上書きしないための番号
+  function refreshBuiltinLatest() {
+    var seq = ++builtinLatestSeq;
+    var NG = '内蔵データの最新回を確認できません。';
+    function show(t) { if (seq === builtinLatestSeq) builtinLatestEl.textContent = t; }
+    show('内蔵データの最新回を確認中…');
+    var ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    var timer = setTimeout(function () { if (ctl) ctl.abort(); }, BUILTIN_TIMEOUT_MS);
+    var req;
+    try { req = fetch(CFG.dataFile, { cache: 'no-store', signal: ctl ? ctl.signal : undefined }); }
+    catch (e0) { clearTimeout(timer); show(NG); return; }
+    req.then(function (res) {
+      if (!res.ok) throw new Error('http');
+      return res.text();
+    }).then(function (text) {
+      clearTimeout(timer);
+      if (text.length > MAX_BUILTIN_CHARS) throw new Error('size');
+      var r = validateBuiltin(JSON.parse(text));
+      if (r.errors.length || !r.list.length) throw new Error('invalid');
+      show('内蔵データの最新回は第' + r.list[r.list.length - 1].round + '回です。');
+    }).catch(function () { clearTimeout(timer); show(NG); });
+  }
+
   // ---- 設定パネルの「現在の抽選データ」表示(読み込み方法・読み込み元・収録回数・最新回) ----
   // 収録回数と最新回は実際の抽選データ(draws)から求める。meta が無い・壊れている場合も読み込み元だけ「不明」にして表示する。
   var dataInfoEl = document.getElementById('data-info');
@@ -958,6 +986,7 @@
   var settingsBackdrop = document.getElementById('settings-backdrop');
   var settingsBtn = document.getElementById('settings-btn');
   function setSettings(open) {
+    if (open && settingsPanel.hidden) refreshBuiltinLatest();   // 開くときだけ内蔵データの最新回を確認(表示のみ)
     settingsPanel.hidden = !open;
     settingsBackdrop.hidden = !open;
     settingsBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
@@ -1236,10 +1265,10 @@
   document.getElementById('memo-close').addEventListener('click', function () { setMemoSheet(false); });
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && memoOpen) setMemoSheet(false); });
 
-  // ---- 予想メモ欄の高さ(3段階:1=通常 / 2=中 / 3=最大) ----
+  // ---- 予想メモ欄の高さ(2段階:1=通常 / 2=最大) ----
   // 高さの実体は CSS(#memo-screen の data-level)。段階の高さ(px)はドラッグ開始時に実際の CSS から測るので、
   // 縦横の向き・画面サイズ・横向き1段化(--pick-h)に自動で追従する。
-  var MEMO_LEVELS = 3;
+  var MEMO_LEVELS = 2;
   var memoLevel = 1;
   function setMemoLevel(n) {
     memoLevel = n;
@@ -1256,7 +1285,7 @@
   }
 
   // シート上部(つまみ+見出し)のドラッグ。反応するのはここだけで、一覧のスクロールとは干渉しない。
-  //  上へ引く → 一段ずつ拡大 / 下へ引く → 一段ずつ縮小 / 通常サイズからさらに下へ引く → 閉じる(従来どおり 80px以上 または 素早く)
+  //  上へ引く → 最大サイズ / 下へ引く → 通常サイズ / 通常サイズからさらに下へ引く → 閉じる(従来どおり 80px以上 または 素早く)
   //  1回のドラッグで動くのは最大一段。指に合わせて高さが連続して変わり、離すと最寄りの段階へ収まる。
   var sheetDrag = null;
   memoTop.addEventListener('pointerdown', function (e) {

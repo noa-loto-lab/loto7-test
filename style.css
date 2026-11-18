@@ -342,10 +342,9 @@ body { position: fixed; inset: 0; width: 100%; }
 #memo-screen {
   position: absolute; z-index: 40;
   left: env(safe-area-inset-left, 0px); right: env(safe-area-inset-right, 0px); bottom: 0;
-  /* 高さは3段階。1=通常(従来と同じ) / 2=中(通常と最大の中間) / 3=最大(上部の操作バーは隠さない)。data-level で切り替える */
+  /* 高さは2段階。1=通常(従来と同じ) / 2=最大(従来の第3段階と同じ。上部の操作バーは隠さない)。data-level で切り替える */
   --mh1: min(max(50%, 200px), calc(100% - var(--stat-h) - var(--pick-h) - 44px));   /* 横向きでも出目表が2〜3行は見えるよう、最小は200px */
-  --mh3: calc(100% - var(--stat-h) - var(--pick-h));
-  --mh2: calc((var(--mh1) + var(--mh3)) / 2);
+  --mh2: calc(100% - var(--stat-h) - var(--pick-h));
   height: var(--mh1);
   display: flex; flex-direction: column;
   padding-bottom: env(safe-area-inset-bottom, 0px);
@@ -356,7 +355,6 @@ body { position: fixed; inset: 0; width: 100%; }
   transition: transform .22s ease-out, height .2s ease-out;
 }
 #memo-screen[data-level="2"] { height: var(--mh2); }
-#memo-screen[data-level="3"] { height: var(--mh3); }
 #memo-screen.open { transform: translateY(0); }
 #memo-screen.dragging { transition: none; }
 #memo-screen[hidden] { display: none; }
@@ -487,8 +485,9 @@ body { position: fixed; inset: 0; width: 100%; }
 .sp-note p:last-child { margin-bottom: 0; }
 .sp-note-check { font-weight: 800; }
 .sp-info-row { display: flex; gap: 8px; }
-.sp-info-k { flex: 0 0 5.5em; font-weight: 800; }
+.sp-info-k { flex: 0 0 6.5em; white-space: nowrap; font-weight: 800; }   /* 項目名は1行(最長6文字)。長い値は値側で折り返す */
 .sp-info-v { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.sp-builtin-latest { margin: -4px 0 0; padding: 0 2px; font-size: 12px; font-weight: 700; line-height: 1.4; color: var(--ink); }   /* 内蔵データファイルの最新回(現在の抽選データとは別) */
 
 /* 予想メモ: 開いている回をまとめて削除 */
 #memo-del-all { height: 32px; padding: 0 10px; font: inherit; font-size: 12px; font-weight: 700; color: #a11a1a; background: var(--paper-alt); border: 1px solid #a11a1a; border-radius: 16px; touch-action: manipulation; }
