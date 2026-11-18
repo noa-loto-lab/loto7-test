@@ -1,5 +1,7 @@
 (function () {
   'use strict';
+  // 環境判定(index.html の起動処理)が済んでいない場合は、アプリの処理を一切始めない
+  if (!window.LOTO7_ENV) return;
 
   // ---- くじ種別ごとの設定(今回有効なのはロト7のみ) ----
   // ロト6・ミニロトを追加するときは、ここに設定を1件足し、default-data.json の lotteries に同じキーでデータを足す。
@@ -1614,6 +1616,7 @@
   init();
 
   toBottom();
-  window.addEventListener('load', toBottom);
+  // app.js は環境判定の後に読み込まれるため、ページの load がすでに終わっている場合はその場で実行する
+  if (document.readyState === 'complete') toBottom(); else window.addEventListener('load', toBottom);
   window.addEventListener('orientationchange', function () { setTimeout(toBottom, 300); });
 })();

@@ -65,8 +65,12 @@
       </div>
     </div>
     <button id="color-btn" class="sp-item" type="button" aria-expanded="false" aria-controls="color-panel">色設定</button>
-    <!-- 一時的な診断用リンク(テスト版のみ)。読み取り専用の storage-check.html を同じウィンドウで開く。診断が終わったらこの1行を削除する -->
-    <a id="storage-check-link" class="sp-item" href="storage-check.html" style="display:flex; align-items:center; flex-shrink:0; box-sizing:border-box; text-decoration:none;">保存領域チェック（一時）</a>
+    <!-- 管理用リンク(テスト環境だけに表示)。environment.json が "test" のときだけ起動処理が表示する。初期状態は非表示 -->
+    <div id="admin-links" style="display:none; flex-direction:column; gap:8px;">
+      <a id="captain-tool-link" class="sp-item" href="captain-data-tool.html" style="display:flex; align-items:center; flex-shrink:0; box-sizing:border-box; text-decoration:none;">内蔵データ作成ツール</a>
+      <!-- 一時的な診断用リンク。読み取り専用の storage-check.html を同じウィンドウで開く。診断が終わったらこの1行を削除する -->
+      <a id="storage-check-link" class="sp-item" href="storage-check.html" style="display:flex; align-items:center; flex-shrink:0; box-sizing:border-box; text-decoration:none;">保存領域チェック（一時）</a>
+    </div>
   </div>
   <!-- 色設定パネル(操作バーの下に重ねて表示。レイアウトには影響しない) -->
   <div id="color-panel" role="dialog" aria-label="色設定" hidden>
@@ -159,6 +163,72 @@
   </div>
   <div id="toast" role="status" aria-live="polite" hidden></div>
 </div>
-<script src="app.js"></script>
+<!-- 起動処理:environment.json で環境(test / production)を判定してから app.js を読み込む。
+     判定できないときはエラーを表示し、app.js を読み込まない(=アプリの初期化を始めない)。
+     環境情報はメモリ上(window.LOTO7_ENV)だけに持ち、localStorage・IndexedDB には保存しない。 -->
+<script>
+(function () {
+  'use strict';
+  var ENV_FILE = 'environment.json';
+  var ENV_TIMEOUT_MS = 10000;
+  var VALID_ENVS = ['test', 'production'];
+
+  function showError(message) {
+    var box = document.createElement('div');
+    box.id = 'env-error';
+    box.setAttribute('role', 'alert');
+    box.style.cssText = 'position:fixed; inset:0; z-index:10000; display:flex; align-items:center; justify-content:center; padding:24px; box-sizing:border-box; background:var(--paper, #f6f5f0); color:var(--ink, #23262b);';
+    var card = document.createElement('div');
+    card.style.cssText = 'max-width:420px; width:100%; padding:16px 18px; border:1px solid var(--ink, #23262b); border-radius:10px; background:var(--paper-alt, #ecebe4); line-height:1.6;';
+    var title = document.createElement('div');
+    title.style.cssText = 'margin-bottom:6px; font-size:16px; font-weight:800;';
+    title.textContent = 'ツールを起動できませんでした';
+    var text = document.createElement('div');
+    text.style.cssText = 'font-size:14px; overflow-wrap:anywhere;';
+    text.textContent = message;   // textContent なので値に記号が含まれていても安全に表示される
+    card.appendChild(title); card.appendChild(text); box.appendChild(card);
+    document.body.appendChild(box);
+  }
+  function Fail(message) { this.message = message; }
+
+  var ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+  var timer = setTimeout(function () { if (ctl) ctl.abort(); }, ENV_TIMEOUT_MS);
+  var req;
+  try { req = fetch(ENV_FILE, { cache: 'no-store', signal: ctl ? ctl.signal : undefined }); }
+  catch (e0) { clearTimeout(timer); showError('環境設定ファイル(environment.json)を読み込めませんでした。'); return; }
+
+  req.then(function (res) {
+    if (res.status === 404) throw new Fail('環境設定ファイル(environment.json)が見つかりません。');
+    if (!res.ok) throw new Fail('環境設定ファイル(environment.json)を読み込めませんでした。(HTTP ' + res.status + ')');
+    return res.text();
+  }, function () {
+    throw new Fail('環境設定ファイル(environment.json)を読み込めませんでした。');
+  }).then(function (text) {
+    clearTimeout(timer);
+    var data;
+    try { data = JSON.parse(text); } catch (e1) { throw new Fail('環境設定ファイル(environment.json)の形式が正しくありません。JSONとして読み取れませんでした。'); }
+    if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Fail('環境設定ファイル(environment.json)の形式が正しくありません。');
+    if (!Object.prototype.hasOwnProperty.call(data, 'environment')) throw new Fail('環境設定ファイル(environment.json)に "environment" の設定がありません。');
+    var env = data.environment;
+    if (typeof env !== 'string' || VALID_ENVS.indexOf(env) < 0) {
+      var shown = JSON.stringify(env); if (shown === undefined) shown = String(env);
+      if (shown.length > 40) shown = shown.slice(0, 40) + '…';
+      throw new Fail('"environment" の値 ' + shown + ' は使用できません。"test" または "production" を指定してください。');
+    }
+    // 4. 環境情報をメモリ上に保持(書き換え不可)
+    Object.defineProperty(window, 'LOTO7_ENV', { value: Object.freeze({ environment: env }), writable: false, configurable: false });
+    // 5. 管理用リンクはテスト環境だけに表示(本番は初期状態の非表示のまま)
+    if (env === 'test') document.getElementById('admin-links').style.display = 'flex';
+    // 6. 既存の app.js を読み込み、通常の初期化を開始する
+    var s = document.createElement('script');
+    s.src = 'app.js';
+    s.onerror = function () { showError('アプリ本体(app.js)を読み込めませんでした。'); };
+    document.body.appendChild(s);
+  }).catch(function (e) {
+    clearTimeout(timer);
+    showError(e instanceof Fail ? e.message : '環境設定ファイル(environment.json)を読み込めませんでした。');
+  });
+})();
+</script>
 </body>
 </html>
