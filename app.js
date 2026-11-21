@@ -60,7 +60,36 @@
     row.appendChild(typeof label === 'string' ? el('round', label) : label);
     for (var c = 1; c <= COLS; c++) row.appendChild(cellFn(c));
   }
-  function colClass(c) { return 'cell' + ([9, 19, 29].indexOf(c) !== -1 ? ' k5' : ''); }
+  // ---- 出目表の区切り方(太い区切り線 = k5 を付ける列)。localStorage の専用キーに保存して次回起動時に復元 ----
+  // 区切り位置は最大数字(COLS = CFG.max)から計算するので、ロト6(43)・ミニロト(31)でも同じ処理で使える。
+  //   '5' '6' '7' : 数字1を起点に5・6・7数字ごと / 'band' : 1〜9・10〜19・20〜29・30〜最大数字 / 'none' : 太い区切り線なし
+  // 線は各グループの右端の列に付ける。最後のグループ(余りを含む)の右端=最大数字には付けない。
+  var ZONE_OPTIONS = ['5', '6', '7', 'band', 'none'];
+  var ZONE_DEFAULT = 'band';                  // 保存がない・壊れているときの初期値(従来の区切り方)
+  var ZONE_KEY = 'loto7.zoneSplit';           // 区切り方だけを保存するキー(既存のキーとは別)
+  function loadZoneMode() {
+    try {
+      var raw = window.localStorage.getItem(ZONE_KEY);
+      if (raw !== null && ZONE_OPTIONS.indexOf(raw) >= 0) return raw;
+    } catch (e) { /* 読めなければ初期値 */ }
+    return ZONE_DEFAULT;
+  }
+  function saveZoneMode() {
+    try { window.localStorage.setItem(ZONE_KEY, ZONE_MODE); } catch (e) { /* 保存できなくても動作は続ける */ }
+  }
+  function zoneEnds(mode, max) {
+    var ends = [], c;
+    if (mode === 'band') {
+      [9, 19, 29].forEach(function (e) { if (e < max) ends.push(e); });
+    } else if (mode === '5' || mode === '6' || mode === '7') {
+      var w = Number(mode);
+      for (c = w; c < max; c += w) ends.push(c);
+    }
+    return ends;
+  }
+  var ZONE_MODE = loadZoneMode();
+  var ZONE_ENDS = zoneEnds(ZONE_MODE, COLS);
+  function colClass(c) { return 'cell' + (ZONE_ENDS.indexOf(c) !== -1 ? ' k5' : ''); }
 
   var headRow = document.getElementById('head-row');
   buildRow(headRow, '開催回', function (c) { return el(colClass(c), c); });
@@ -82,7 +111,7 @@
       roundCell.appendChild(el('rd-date', shortDate(d.date)));
       buildRow(row, roundCell, function (c) {
         var main = !!d.nums[c], bonus = !!d.bonus[c], hit = main || bonus;
-        return el(colClass(c).replace(' k5', hit ? '' : ' k5') + (main ? ' hit main' : bonus ? ' hit bonus' : ''), hit ? c : '');
+        return el(colClass(c) + (main ? ' hit main' : bonus ? ' hit bonus' : ''), hit ? c : '');   // 区切り線(k5)は色付きマスにも付ける
       });
       tableRows.appendChild(row);
     });
@@ -1018,6 +1047,34 @@
     });
   });
   applyRoundsButtons();
+
+  // 出目表の区切り方(5個・6個・7個・数字帯・なし)。見出し・出目表・数字タップ欄の太い区切り線の位置だけを変える。
+  // 作り直さずに k5 の付け外しだけを行う(色付きマスにも付ける = renderHistory と同じ条件)。選択数字・スクロール位置は変えない。
+  var zoneBtns = Array.prototype.slice.call(document.querySelectorAll('#zone-options button'));
+  function applyZoneButtons() {
+    zoneBtns.forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.z === ZONE_MODE ? 'true' : 'false'); });
+  }
+  function applyZoneLines() {
+    ZONE_ENDS = zoneEnds(ZONE_MODE, COLS);
+    var rows = [headRow, predRow].concat(Array.prototype.slice.call(tableRows.children));
+    rows.forEach(function (row) {
+      for (var c = 1; c <= COLS && c < row.children.length; c++) {
+        var cell = row.children[c];
+        cell.classList.toggle('k5', ZONE_ENDS.indexOf(c) !== -1);
+      }
+    });
+  }
+  zoneBtns.forEach(function (b) {
+    b.addEventListener('click', function () {
+      var z = b.dataset.z;
+      if (ZONE_OPTIONS.indexOf(z) < 0 || z === ZONE_MODE) return;
+      ZONE_MODE = z;
+      saveZoneMode();
+      applyZoneButtons();
+      applyZoneLines();
+    });
+  });
+  applyZoneButtons();
 
   // ======================================================================
   // v4.0 予想メモ
