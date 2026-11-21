@@ -453,6 +453,14 @@ body { position: fixed; inset: 0; width: 100%; }
 #settings-panel[hidden] { display: none; }
 #settings-panel .cp-head { margin-bottom: 0; }
 #settings-panel > * { flex-shrink: 0; }   /* 中身がパネルより長いとき(横向きなど)、ボタンを縮めずにスクロールさせる */
+/* 縦画面では設定パネルの高さを画面の約60%までにし、パネルの下から出目表が見えるようにする(中身は従来どおりパネル内で縦スクロール)。
+   60dvh に対応していない古いブラウザは 60vh を使う。従来の上限(操作バーの下〜画面下端)より高くはしない。横画面は対象外 */
+@media (orientation: portrait) {
+  #settings-panel {
+    max-height: min(60vh, calc(100% - var(--stat-h) - env(safe-area-inset-bottom, 0px) - 8px));
+    max-height: min(60dvh, calc(100% - var(--stat-h) - env(safe-area-inset-bottom, 0px) - 8px));
+  }
+}
 #sp-close {
   height: 30px; padding: 0 12px; font: inherit; font-weight: 700; color: var(--ink);
   background: var(--paper-alt); border: 1px solid var(--ink); border-radius: 6px; touch-action: manipulation;
