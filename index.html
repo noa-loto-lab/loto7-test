@@ -46,6 +46,18 @@
         <button type="button" data-n="50" aria-pressed="false">50回</button>
       </div>
     </div>
+    <!-- 出目表の区切り方(太い区切り線の位置)。選択は localStorage に保存 -->
+    <div class="sp-group" role="group" aria-labelledby="sp-zone-label">
+      <span id="sp-zone-label" class="sp-label">出目表の区切り方</span>
+      <div id="zone-options" class="seg">
+        <button type="button" data-z="5" aria-pressed="false">5個</button>
+        <button type="button" data-z="6" aria-pressed="false">6個</button>
+        <button type="button" data-z="7" aria-pressed="false">7個</button>
+        <button type="button" data-z="band" aria-pressed="false">数字帯</button>
+        <button type="button" data-z="none" aria-pressed="false">なし</button>
+      </div>
+    </div>
+    <button id="color-btn" class="sp-item" type="button" aria-expanded="false" aria-controls="color-panel">色設定</button>
     <!-- 抽選データ:①現在使用中の抽選データ(読み込み情報欄は従来どおり app.js が表示) -->
     <section class="sp-block sp-block-current" aria-labelledby="sp-current-title">
       <h2 id="sp-current-title" class="sp-block-title">現在使用中の抽選データ</h2>
@@ -64,7 +76,6 @@
         <p class="sp-builtin-text"><span>内蔵データは随時更新しています。</span><span>最新回の反映まで時間がかかる場合があります。</span><span>更新を希望する場合は、ツール作成者にお知らせください。</span></p>
       </div>
     </div>
-    <button id="color-btn" class="sp-item" type="button" aria-expanded="false" aria-controls="color-panel">色設定</button>
     <!-- 管理用リンク(テスト環境だけに表示)。environment.json が "test" のときだけ起動処理が表示する。初期状態は非表示 -->
     <div id="admin-links" style="display:none; flex-direction:column; gap:8px;">
       <a id="captain-tool-link" class="sp-item" href="captain-data-tool.html" style="display:flex; align-items:center; flex-shrink:0; box-sizing:border-box; text-decoration:none;">内蔵データ作成ツール</a>
