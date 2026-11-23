@@ -18,6 +18,9 @@
     }
   };
   var CFG = LOTTERY_CONFIG.loto7;   // 現在のくじ種別(今回はロト7固定)
+  // 表示設定(縮尺・表示回数・色・区切り方)の localStorage キーをくじ種別ごとに分ける。
+  // キーは「くじ種別の id + '.' + 項目名」。ロト7では従来と同じキー('loto7.zoom' など)になり、ロト6・ミニロトは別のキー('loto6.zoom' など)になる。
+  function settingKey(name) { return CFG.id + '.' + name; }
   var COLS = CFG.max;               // 1〜37
   var PICK = CFG.mainCount;         // 1回あたりの本数字の数
   var BONUS = CFG.bonusCount;       // ボーナス数字の数
@@ -66,7 +69,7 @@
   // 線は各グループの右端の列に付ける。最後のグループ(余りを含む)の右端=最大数字には付けない。
   var ZONE_OPTIONS = ['5', '6', '7', 'band', 'none'];
   var ZONE_DEFAULT = 'band';                  // 保存がない・壊れているときの初期値(従来の区切り方)
-  var ZONE_KEY = 'loto7.zoneSplit';           // 区切り方だけを保存するキー(既存のキーとは別)
+  var ZONE_KEY = settingKey('zoneSplit');     // 区切り方だけを保存するキー(既存のキーとは別。ロト7は 'loto7.zoneSplit')
   function loadZoneMode() {
     try {
       var raw = window.localStorage.getItem(ZONE_KEY);
@@ -309,7 +312,7 @@
   // 倍率の実体は CSS変数 --z(列幅・行高・文字サイズを実寸で変える)。transform は2本指ピンチの操作中の見た目(プレビュー)にだけ一時的に使う。
   var ZOOMS = [20, 25, 30, 40, 50, 60, 70, 80, 90, 100, 120, 140];   // %(ボタン・ピンチ・保存・復元のすべてがこの一覧を使う。20・25は全体を見渡すための縮小表示)
   var ZOOM_DEFAULT = 40;                                // 保存がない・壊れているときの初期値(%)
-  var ZOOM_KEY = 'loto7.zoom';                          // 縮尺だけを保存するキー(表示回数とは別)
+  var ZOOM_KEY = settingKey('zoom');                    // 縮尺だけを保存するキー(表示回数とは別。ロト7は 'loto7.zoom')
   function loadZoomIndex() {
     try {
       var raw = window.localStorage.getItem(ZOOM_KEY);
@@ -514,7 +517,7 @@
   // ---- 色設定(本数字・ボーナス数字の色。localStorageに保存) ----
   var DEFAULT_COLORS = { main: '#d3202c', bonus: '#f5b700' };
   var PALETTE = ['#d3202c', '#f5b700', '#1f5fd1', '#c2410c', '#7e22ce', '#15803d', '#0f766e', '#9d174d', '#374151'];
-  var STORE_KEY = 'loto7.colors';
+  var STORE_KEY = settingKey('colors');   // ロト7は 'loto7.colors'
   var colors = { main: DEFAULT_COLORS.main, bonus: DEFAULT_COLORS.bonus };
   var HEX = /^#[0-9a-f]{6}$/i;
 
@@ -598,7 +601,7 @@
   // 表示回数(出目表に出す直近の回数だけを変える。縮尺・行の高さ・数字の大きさには影響しない)。localStorage に保存して次回起動時に復元
   var ROUNDS_OPTIONS = [5, 10, 20, 30, 50];
   var ROUNDS_DEFAULT = 20;                    // 保存がない・壊れているときの初期値
-  var ROUNDS_KEY = 'loto7.showRounds';        // 表示回数だけを保存するキー(縮尺とは別)
+  var ROUNDS_KEY = settingKey('showRounds'); // 表示回数だけを保存するキー(縮尺とは別。ロト7は 'loto7.showRounds')
   function loadShowRounds() {
     try {
       var raw = window.localStorage.getItem(ROUNDS_KEY);
@@ -612,6 +615,9 @@
   var SHOW_ROUNDS = loadShowRounds();         // 表示する直近の回数
   var MAX_CSV_BYTES = 5 * 1024 * 1024;
   var CSV_HEADER = CFG.csvHeader;
+  // CSVの列位置(0始まり)。開催回・開催日の2列の後ろに本数字 PICK 列、続けてボーナス数字 BONUS 列が並ぶ(ロト7:本数字 2〜8、ボーナス数字 9〜10)
+  var CSV_MAIN_START = 2;
+  var CSV_BONUS_START = CSV_MAIN_START + PICK;
   var csvBtn = document.getElementById('csv-btn');
   var csvInput = document.getElementById('csv-input');
   var csvMsg = document.getElementById('csv-msg');
@@ -701,13 +707,13 @@
       var date = parseDate(f[1]);
       if (!date) { err(at + '第' + round + '回の開催日「' + f[1] + '」を読み取れません(例:2024/4/5)。'); bad = true; }
       var nums = {}, bonus = {}, k, v;
-      for (k = 2; k <= 8; k++) {
+      for (k = CSV_MAIN_START; k < CSV_BONUS_START; k++) {
         v = f[k];
         if (!intRe.test(v) || +v < 1 || +v > COLS) { err(at + '第' + round + '回の' + CSV_HEADER[k] + '「' + v + '」は1〜' + COLS + 'の数字ではありません。'); bad = true; continue; }
         if (nums[+v]) { err(at + '第' + round + '回の本数字に' + v + 'が重複しています。'); bad = true; continue; }
         nums[+v] = true;
       }
-      for (k = 9; k <= 10; k++) {
+      for (k = CSV_BONUS_START; k < CSV_BONUS_START + BONUS; k++) {
         v = f[k];
         if (!intRe.test(v) || +v < 1 || +v > COLS) { err(at + '第' + round + '回の' + CSV_HEADER[k] + '「' + v + '」は1〜' + COLS + 'の数字ではありません。'); bad = true; continue; }
         if (nums[+v] || bonus[+v]) { err(at + '第' + round + '回のボーナス数字' + v + 'が、本数字または他のボーナス数字と重複しています。'); bad = true; continue; }
@@ -1151,6 +1157,10 @@
       req.onblocked = function () { reject(new Error('open待ち')); };
     });
   }
+  // メモのくじ種別。lottery を持たない古いメモはロト7のもの(ロト7しかなかった時期の記録)として扱う。保存データは書き換えない。
+  function memoLottery(r) { return r && typeof r.lottery === 'string' ? r.lottery : 'loto7'; }
+  // 予想番号カウンタ(meta)のキー。ロト7は従来どおり 'seq:' + 対象回(既存の番号を引き継ぐ)。他のくじは 'seq:' + くじ種別 + ':' + 対象回 で分ける。
+  function memoSeqKey(target) { return LOTTERY === 'loto7' ? 'seq:' + target : 'seq:' + LOTTERY + ':' + target; }
   function validMemo(r) {
     if (!r || typeof r.id !== 'number' || typeof r.target !== 'string' || !Array.isArray(r.numbers) || r.numbers.length !== MAX_SELECT) return false;
     var seen = {};
@@ -1167,6 +1177,7 @@
       var tx = d.transaction(['memos'], 'readonly');
       tx.objectStore('memos').getAll().onsuccess = function (e) {
         e.target.result.forEach(function (r) {
+          if (memoLottery(r) !== LOTTERY) return;   // 他のくじのメモは読み込まない(保存データはそのまま)
           if (!validMemo(r)) return;   // 壊れた1件は無視(他の予想は読む)
           r.numbers = r.numbers.slice().sort(function (a, b) { return a - b; });
           if (r.mark !== 'buy' && r.mark !== 'maybe') r.mark = '';
@@ -1185,7 +1196,7 @@
       var saved = null;
       tx.oncomplete = function () { resolve(saved); };
       tx.onerror = tx.onabort = function () { reject(tx.error || new Error('保存失敗')); };
-      var meta = tx.objectStore('meta'), key = 'seq:' + rec.target;
+      var meta = tx.objectStore('meta'), key = memoSeqKey(rec.target);
       meta.get(key).onsuccess = function (e) {
         var cur = e.target.result, n = ((cur && cur.value) || 0) + 1;
         meta.put({ key: key, value: n });
@@ -1214,8 +1225,8 @@
   // サンプル用メモ(抽選データ未読込のときに作られた予想)か。内容(数字・印)では判定せず、アプリが付ける固定の識別値だけで判定する。
   // 実データ用のメモは target が 'r'+開催回、round が整数なので、ここには当てはまらない。
   function isSampleMemo(m) { return !!m && m.lottery === LOTTERY && m.target === 'sample' && m.round === null; }
-  // サンプル用メモと、その予想番号カウンタ(meta の 'seq:sample')を1つのトランザクションで削除。解決値=削除した口数。
-  // 'sample' でも条件に合わない記録が残る場合は、カウンタは消さない。
+  // サンプル用メモと、その予想番号カウンタ(meta の memoSeqKey('sample')。ロト7は 'seq:sample')を1つのトランザクションで削除。解決値=削除した口数。
+  // 同じくじの 'sample' で条件に合わない記録が残る場合は、カウンタは消さない。他のくじのメモ・カウンタには触れない。
   function dbDeleteSampleMemos() {
     return new Promise(function (resolve, reject) {
       if (!memoDb) { reject(new Error('メモDBなし')); return; }
@@ -1230,11 +1241,11 @@
           if (c) {
             var r = c.value;
             if (isSampleMemo(r)) { c.delete(); removed++; }
-            else if (r && r.target === 'sample') other++;
+            else if (r && r.target === 'sample' && memoLottery(r) === LOTTERY) other++;
             c.continue();
             return;
           }
-          if (!other) tx.objectStore('meta').delete('seq:sample');
+          if (!other) tx.objectStore('meta').delete(memoSeqKey('sample'));
         } catch (err) { try { tx.abort(); } catch (e2) { reject(err); } }   // 途中で失敗したら全体を取り消す
       };
     });
