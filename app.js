@@ -3,21 +3,44 @@
   // 環境判定(index.html の起動処理)が済んでいない場合は、アプリの処理を一切始めない
   if (!window.LOTO7_ENV) return;
 
-  // ---- くじ種別ごとの設定(今回有効なのはロト7のみ) ----
-  // ロト6・ミニロトを追加するときは、ここに設定を1件足し、default-data.json の lotteries に同じキーでデータを足す。
-  //   id        : IndexedDB(draws の lottery 列・kvのキー)で使う識別子。既存の保存データと同じ値('loto7')を変えないこと
+  // ---- くじ種別ごとの設定 ----
+  //   id        : IndexedDB(draws の lottery 列・kvのキー)・localStorage のキーで使う識別子。既存の保存データと同じ値('loto7')を変えないこと
   //   max       : 最大数字(1〜max)   mainCount / bonusCount : 本数字・ボーナス数字の個数
-  //   csvHeader : CSVの1行目(列構成。この列数・名前と完全一致が必要)
-  //   dataFile / dataKey : 内蔵データファイル名と、その中の lotteries のキー
-  // ※ 画面側(出目表の列数・選択上限 MAX_SELECT・予想メモ・ゲーム切り替えUI)はまだロト7固定。ロト6・ミニロトの画面対応は今回の対象外。
+  //   csvHeader : CSVの1行目(列構成。この列数・名前と完全一致が必要。列数 = 2 + mainCount + bonusCount)
+  //   dataFile / dataKey : 内蔵データファイル名と、その中の lotteries のキー。dataFile が null のくじは内蔵データがまだない(読み込み時に案内だけ表示)
+  //   sample    : 抽選データがないときに仮データ(サンプル)を表示するか。ロト7だけ従来どおり表示。それ以外は空データ状態(数字選択・メモ追加は無効)
+  // ※ ロト6・ミニロトのCSV見出しは、実物のCSVが未確認のため、ロト7と同じ書式で数字の数だけ変えたもの。
   var LOTTERY_CONFIG = {
     loto7: {
       id: 'loto7', label: 'ロト7', max: 37, mainCount: 7, bonusCount: 2,
       csvHeader: ['開催回', '開催日', '第1数字', '第2数字', '第3数字', '第4数字', '第5数字', '第6数字', '第7数字', 'ボーナス数字1', 'ボーナス数字2'],
-      dataFile: 'default-data.json', dataKey: 'loto7'
+      dataFile: 'default-data.json', dataKey: 'loto7', sample: true
+    },
+    loto6: {
+      id: 'loto6', label: 'ロト6', max: 43, mainCount: 6, bonusCount: 1,
+      csvHeader: ['開催回', '開催日', '第1数字', '第2数字', '第3数字', '第4数字', '第5数字', '第6数字', 'ボーナス数字'],
+      dataFile: null, dataKey: 'loto6', sample: false
+    },
+    miniloto: {
+      id: 'miniloto', label: 'ミニロト', max: 31, mainCount: 5, bonusCount: 1,
+      csvHeader: ['開催回', '開催日', '第1数字', '第2数字', '第3数字', '第4数字', '第5数字', 'ボーナス数字'],
+      dataFile: null, dataKey: 'miniloto', sample: false
     }
   };
-  var CFG = LOTTERY_CONFIG.loto7;   // 現在のくじ種別(今回はロト7固定)
+  var GAME_ORDER = ['loto7', 'loto6', 'miniloto'];   // タブの並び
+  // 最後に使ったくじ種別(ゲーム)。切替のときだけ保存し、起動時に復元する。保存がない・不正な値ならロト7(初回起動)
+  var GAME_KEY = 'lotoTool.lastGame';
+  function loadLastGame() {
+    try {
+      var v = window.localStorage.getItem(GAME_KEY);
+      if (v !== null && Object.prototype.hasOwnProperty.call(LOTTERY_CONFIG, v)) return v;
+    } catch (e) { /* 読めなければロト7 */ }
+    return 'loto7';
+  }
+  var CFG = LOTTERY_CONFIG[loadLastGame()];   // 現在のくじ種別。画面・保存はすべてこの設定から決まる(切替はページの再読み込みで行う)
+  // 画面のくじ別対応:出目表の列数(CSSの --cols)と選択数字の枠の数を設定に合わせる(ロト7は従来と同じ37列・7枠)
+  document.documentElement.style.setProperty('--cols', String(CFG.max));
+  Array.prototype.forEach.call(document.querySelectorAll('#picked .chip-slot'), function (slot, i) { if (i >= CFG.mainCount) slot.parentNode.removeChild(slot); });
   // 表示設定(縮尺・表示回数・色・区切り方)の localStorage キーをくじ種別ごとに分ける。
   // キーは「くじ種別の id + '.' + 項目名」。ロト7では従来と同じキー('loto7.zoom' など)になり、ロト6・ミニロトは別のキー('loto6.zoom' など)になる。
   function settingKey(name) { return CFG.id + '.' + name; }
@@ -119,7 +142,8 @@
       tableRows.appendChild(row);
     });
   }
-  var sampleData = makeData();   // 保存データがないときだけ表示する仮データ(起動処理 startUp で描画)
+  var sampleData = CFG.sample ? makeData() : [];   // 保存データがないときだけ表示する仮データ(起動処理 startUp で描画)。サンプルなしのくじは空
+  function noData() { return !CFG.sample && !draws.length; }   // 空データ状態(サンプルを出さないくじで抽選データがない)
   var dataMeta = null;           // 現在の抽選データの読み込み元情報(保存済みのmeta。なければnull)
   var draws = [];                // 現在の抽選データ(全回分・開催回の昇順)。表示は最新40回だけ
 
@@ -223,15 +247,18 @@
 
   // 選択数字の保存(0個のときは保存データごと消す)
   var selSaveFailShown = false;
+  var selPending = null;   // 最後に始めた選択数字の保存(ゲーム切替の前に完了を待つ。解決値 true=保存済み / false=失敗)
   function saveSelection() {
     if (memoryOnly || !dbHandle) return;
     var arr = numKeys(selected);
     try {
       var tx = dbHandle.transaction(['kv'], 'readwrite'), kv = tx.objectStore('kv');
       if (arr.length) kv.put({ key: KEY_SEL, numbers: arr, from: fromMemo || null }); else kv.delete(KEY_SEL);   // from: 予想メモから呼び出した場合の元予想
-      tx.oncomplete = function () { selSaveFailShown = false; };
-      tx.onabort = tx.onerror = function () { selSaveFailed(); };
-    } catch (e) { selSaveFailed(); }
+      selPending = new Promise(function (res) {
+        tx.oncomplete = function () { selSaveFailShown = false; res(true); };
+        tx.onabort = tx.onerror = function () { selSaveFailed(); res(false); };
+      });
+    } catch (e) { selSaveFailed(); selPending = Promise.resolve(false); }
   }
   function selSaveFailed() {
     if (selSaveFailShown) return;   // 連続して失敗しても通知は1回だけ
@@ -247,7 +274,9 @@
 
   function selectedCount() { return Object.keys(selected).length; }
 
+  var appEl = document.getElementById('app');
   function render() {
+    appEl.classList.toggle('no-data', noData());   // 空データ状態(数字タップ欄を無効の見た目に)
     var n = selectedCount();
     clearBtn.disabled = n === 0;
     var values = Object.keys(selected).map(Number).sort(function (a, b) { return a - b; });
@@ -270,7 +299,7 @@
 
   var predRound = predRow.querySelector('.round');
   predRow.addEventListener('click', function (e) {
-    if (!ready || busy) return;
+    if (!ready || busy || noData()) return;   // 空データ状態では数字を選べない
     // タップ領域を上下に広げたため、左端の固定列(次回予想)の上下の余白は、下に隠れたマスに届く。固定列の範囲は無視する
     if (predRound && e.clientX < predRound.getBoundingClientRect().right) return;
     var cell = e.target.closest('.cell[data-n]');
@@ -297,7 +326,7 @@
   });
 
   clearBtn.addEventListener('click', function () {
-    if (!ready || busy) return;
+    if (!ready || busy || noData()) return;
     selected = {};
     fromMemo = null;   // v4.0
     render();
@@ -806,6 +835,7 @@
   // 現在の抽選データ(draws。なければ仮データ)から、直近の表示回数だけを表に出す
   function refreshHistory() {
     renderHistory((draws.length ? draws : sampleData).slice(-SHOW_ROUNDS));
+    if (noData()) tableRows.appendChild(el('empty-note', CFG.label + 'の抽選データはまだありません。設定の「CSV読み込み」から読み込めます。'));
   }
   function showDraws(meta) { refreshHistory(); }
 
@@ -882,6 +912,10 @@
 
   function loadBuiltin() {
     if (builtinLoading) return;
+    if (!CFG.dataFile) {   // このくじの内蔵データファイルはまだない(エラーではなく案内。データは変更しない)
+      showMsg(false, CFG.label + 'の内蔵データはまだありません', ['「CSV読み込み」から抽選データを読み込めます。', '現在のデータはそのままです。']);
+      return;
+    }
     if (!ready || busy) { showMsg(true, '少し待ってください', ['保存の準備中、または保存中です。数秒後にもう一度お試しください。', '以前のデータはそのままです。']); return; }
     var hasData = draws.length > 0;
     var sampleN = memoReady ? memos.filter(isSampleMemo).length : 0;
@@ -957,6 +991,7 @@
     var seq = ++builtinLatestSeq;
     var NG = '内蔵データの最新回を確認できません。';
     function show(t) { if (seq === builtinLatestSeq) builtinLatestEl.textContent = t; }
+    if (!CFG.dataFile) { show(CFG.label + 'の内蔵データはまだありません。'); return; }
     show('内蔵データの最新回を確認中…');
     var ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
     var timer = setTimeout(function () { if (ctl) ctl.abort(); }, BUILTIN_TIMEOUT_MS);
@@ -988,7 +1023,7 @@
   function renderDataInfo() {
     var rows = [];
     if (!draws.length) {
-      rows.push(['抽選データ', '未読み込み(サンプル表示)']);
+      rows.push(['抽選データ', CFG.sample ? '未読み込み(サンプル表示)' : '未読み込み']);
     } else {
       var m = (dataMeta && typeof dataMeta === 'object') ? dataMeta : null;
       var kind = '不明', src = '記録なし';
@@ -1113,7 +1148,7 @@
     if (draws.length) { var r = draws[draws.length - 1].round + 1; return { key: 'r' + r, round: r, sample: false }; }
     return { key: 'sample', round: null, sample: true };
   }
-  function targetLabel(key) { return key === 'sample' ? 'サンプル(CSV未読込)' : '第' + key.slice(1) + '回'; }
+  function targetLabel(key) { return key === 'sample' ? (CFG.sample ? 'サンプル(CSV未読込)' : 'データなし(CSV未読込)') : '第' + key.slice(1) + '回'; }
 
   function toast(msg, warn) {
     clearTimeout(toastTimer);
@@ -1277,6 +1312,7 @@
 
   // ---- 追加 ----
   function addMemo() {
+    if (noData()) { toast(CFG.label + 'の抽選データを読み込むと予想メモを作れます', true); return; }
     if (!ready || busy || !memoReady || memoBusy) { toast('準備中です。少し待ってからもう一度押してください。', true); return; }
     var n = selectedCount();
     if (n < MAX_SELECT) {
@@ -1605,6 +1641,7 @@
     if (!memoAddBtn) return;   // 起動中(部品の準備前)は何もしない
     var n = selectedCount();
     memoAddBtn.classList.toggle('short', n < MAX_SELECT);
+    memoAddBtn.disabled = noData();   // 空データ状態では予想メモを作れない
     var msg = document.getElementById('selection-msg');
     msg.textContent = '';
     if (fromMemo && n > 0) {
@@ -1635,6 +1672,82 @@
       });
     }).catch(useMemoryOnly);
   })();
+
+  // ======================================================================
+  // ゲーム切替(タブ)。確認ダイアログは出さない。
+  //  1. 現在のゲームの状態を保存(選択数字の保存完了を待つ。設定・予想メモは変更のたびに保存済み)
+  //  2.「読み込み中…」を表示し、3. 操作を止める(画面全体を覆う)
+  //  4. 切替先の抽選履歴・選択数字・予想メモ・設定を読み取り専用で読み込んで確認
+  //  5. 成功したら最後のゲームを保存してページを再読み込み(切替先の設定で画面を組み立て直す) → 6. 起動処理が終われば操作できる
+  // 失敗したら何も変更せずに今のゲームの画面へ戻す(切替先の保存データも変更しない)。もう一度タブを押すと再試行できる。
+  // 抽選データが0件のゲームは失敗ではなく「空データ」として切り替える。
+  // ======================================================================
+  memoAddBtn.setAttribute('aria-label', '選択中の' + MAX_SELECT + '数字を予想メモに追加');   // ロト7は従来と同じ文言
+  var gameTabsEl = document.getElementById('game-tabs');
+  var gameLoadingEl = document.getElementById('game-loading');
+  var SWITCH_TIMEOUT_MS = 8000;
+  var switching = false;
+  GAME_ORDER.forEach(function (id) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'game-tab';
+    b.dataset.game = id;
+    b.setAttribute('role', 'tab');
+    b.setAttribute('aria-selected', id === CFG.id ? 'true' : 'false');
+    b.textContent = LOTTERY_CONFIG[id].label;
+    b.addEventListener('click', function () { switchGame(id); });
+    gameTabsEl.appendChild(b);
+  });
+  function readGameData(id) {   // 切替先の保存データを読むだけ(書き込みはしない)。解決値は件数の確認用
+    var lot = LOTTERY_CONFIG[id].id;
+    var p1 = new Promise(function (resolve, reject) {
+      if (memoryOnly || !dbHandle) { reject(new Error('この端末ではブラウザの保存機能が使えないため、切り替えできません(切り替えると今のデータが消えるため)。')); return; }
+      var out = { draws: 0, meta: null, selected: null }, tx;
+      try { tx = dbHandle.transaction(['draws', 'kv'], 'readonly'); } catch (e) { reject(e); return; }
+      tx.objectStore('draws').getAll(IDBKeyRange.bound([lot, 0], [lot, Infinity])).onsuccess = function (e) { out.draws = e.target.result.length; };
+      tx.objectStore('kv').get('meta:' + lot).onsuccess = function (e) { out.meta = e.target.result || null; };
+      tx.objectStore('kv').get('selected:' + lot).onsuccess = function (e) { out.selected = e.target.result || null; };
+      tx.oncomplete = function () { resolve(out); };
+      tx.onerror = tx.onabort = function () { reject(tx.error || new Error('抽選データを読み込めませんでした。')); };
+    });
+    var p2 = new Promise(function (resolve, reject) {
+      if (memoMemoryOnly || !memoDb) { reject(new Error('予想メモの保存機能が使えないため、切り替えできません。')); return; }
+      var n = 0, tx;
+      try { tx = memoDb.transaction(['memos'], 'readonly'); } catch (e) { reject(e); return; }
+      tx.objectStore('memos').getAll().onsuccess = function (e) { e.target.result.forEach(function (r) { if (memoLottery(r) === lot) n++; }); };
+      tx.oncomplete = function () { resolve(n); };
+      tx.onerror = tx.onabort = function () { reject(tx.error || new Error('予想メモを読み込めませんでした。')); };
+    });
+    var p3 = new Promise(function (resolve) {   // 表示設定・色設定(読めない・壊れている値は起動時と同じく初期値になるので失敗扱いにしない)
+      var o = {};
+      ['zoom', 'showRounds', 'colors', 'zoneSplit'].forEach(function (k) { try { o[k] = window.localStorage.getItem(lot + '.' + k); } catch (e) { o[k] = null; } });
+      resolve(o);
+    });
+    var timeout = new Promise(function (_, reject) { setTimeout(function () { reject(new Error('読み込みが時間内に終わりませんでした。')); }, SWITCH_TIMEOUT_MS); });
+    return Promise.race([Promise.all([p1, p2, p3]), timeout]);
+  }
+  function switchGame(id) {
+    if (switching || id === CFG.id || !Object.prototype.hasOwnProperty.call(LOTTERY_CONFIG, id)) return;
+    if (!ready || busy || builtinLoading || !memoReady || memoBusy) { toast('準備中または保存中です。少し待ってからもう一度押してください。', true); return; }
+    var target = LOTTERY_CONFIG[id];
+    switching = true;
+    setMemoSheet(false); setPanel(false); setSettings(false);   // 予想メモ画面・設定画面を閉じる
+    clearTimeout(csvMsgTimer); csvMsg.hidden = true;
+    gameLoadingEl.hidden = false;                               // 「読み込み中…」(画面全体を覆って操作を止める)
+    (selPending || Promise.resolve(true)).then(function (saved) {
+      if (!saved) throw new Error(CFG.label + 'の選択数字を保存できませんでした。');
+      return readGameData(id);
+    }).then(function () {
+      window.localStorage.setItem(GAME_KEY, target.id);          // 最後のゲームを保存(失敗したら切り替えない)
+      if (window.localStorage.getItem(GAME_KEY) !== target.id) throw new Error('最後に使ったゲームを保存できませんでした。');
+      window.location.reload();
+    }).catch(function (e) {
+      gameLoadingEl.hidden = true;
+      switching = false;
+      var reason = e && e.message && /[ぁ-んァ-ン一-龥]/.test(e.message) ? e.message : '保存データを読み込めませんでした。';
+      showMsg(true, target.label + 'に切り替えられませんでした', [reason, CFG.label + 'のまま表示しています。どちらのゲームのデータも変更していません。', 'もう一度「' + target.label + '」を押すと再試行します。']);
+    });
+  }
 
   // ---- 起動:保存済みの抽選データ・選択数字を復元 ----
   function startUp(saved) {

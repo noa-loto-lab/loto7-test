@@ -17,9 +17,10 @@
 <div id="app">
   <!-- タイトル行：正式名称を控えめに表示 -->
   <div id="app-title"><span>ロト予想、置いてみた。</span></div>
-  <!-- A. 操作バー(上部固定):ロト7表示 / 縮小・拡大 / (右寄せ)メモを開く / 設定(歯車) -->
+  <!-- ゲーム切替タブ(ロト7・ロト6・ミニロト。ボタンは app.js が設定から作る)。縦向き:タイトルの下 / 横向き:タイトル行の右側 -->
+  <nav id="game-tabs" role="tablist" aria-label="ゲームの切り替え"></nav>
+  <!-- A. 操作バー(上部固定):縮小・拡大 / (右寄せ)メモを開く / 設定(歯車) -->
   <div id="status-bar">
-    <span id="game-label" data-game="loto7" role="img" aria-label="ロト7">7</span>
     <button id="zoom-out" class="icon-btn" type="button" aria-label="縮小">−</button>
     <button id="zoom-in" class="icon-btn" type="button" aria-label="拡大">＋</button>
     <span class="bar-spacer"></span>
@@ -107,6 +108,7 @@
     </div>
   </div>
   <!-- CSV読み込みの結果・エラー表示(重ねて表示。レイアウトには影響しない) -->
+  <div id="game-loading" role="status" aria-live="polite" hidden><span>読み込み中…</span></div>
   <div id="csv-msg" role="status" hidden>
     <div class="cp-head">
       <span class="cp-title" id="csv-msg-title"></span>
@@ -114,7 +116,7 @@
     </div>
     <div id="csv-msg-body"></div>
   </div>
-  <!-- B. 選択数字エリア(操作バーの直下・固定):選択中の数字(固定7枠。左に1枠分の余白)/ メモに追加 / クリア -->
+  <!-- B. 選択数字エリア(操作バーの直下・固定):選択中の数字(枠はゲームの本数字の数。app.js が7枠から余分を外す)/ メモに追加 / クリア -->
   <div id="selection-bar">
     <div id="picked" aria-label="選択した数字">
       <span class="chip-slot" data-slot="0"></span>
