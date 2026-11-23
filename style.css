@@ -13,7 +13,9 @@
   /* 改善C: 数字マスの上下に広げるタップ領域(見た目は変えない)。縮尺が小さいほど効く(旧版比 40%で約1.5倍・50%で約1.4倍)。
      上は予想欄の上余白(7px)、下は予想欄の下余白に収める。上限6px。 */
   --tap-ext: min(calc(10px * var(--z)), 6px);
-  --stat-h: 78px;                     /* タイトル行＋A 操作バー(上部固定) */
+  --stat-h: 84px;                     /* 1段目(ゲーム切替ボタン＋タイトル 36px)＋A 操作バー(48px)(上部固定) */
+  --tab-w: 62px;                      /* ゲーム切替ボタン1個の幅(3個とも同じ) */
+  --tab-gap: 6px;                     /* ゲーム切替ボタンの間隔 */
   --pick-h: 48px;                     /* B 選択数字エリア(縮尺の対象外・上部固定)。メモ系ボタン(--ctl-h)が収まるよう操作バーと同じ高さ */
   --ctl-h: 44px;                      /* 操作ボタンの高さ(−・＋・メモを開く・メモに追加で共通) */
   --chip: 22px;                       /* 選択数字の枠(固定7枠) */
@@ -59,7 +61,7 @@ body { position: fixed; inset: 0; width: 100%; }
   position: absolute;
   inset: 0;
   display: grid;
-  grid-template-rows: 30px calc(var(--stat-h) - 30px) var(--pick-h) minmax(0, 1fr);   /* タイトル / A 操作バー / B 選択数字 / C 出目表+数字タップ欄 */
+  grid-template-rows: 36px calc(var(--stat-h) - 36px) var(--pick-h) minmax(0, 1fr);   /* 1段目(切替ボタン・タイトル) / A 操作バー / B 選択数字 / C 出目表+数字タップ欄 */
   /* 横向き時のノッチ・ホームバー対策 */
   padding: 0 env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
 }
@@ -192,29 +194,31 @@ body { position: fixed; inset: 0; width: 100%; }
   white-space: nowrap;
 }
 .bar-spacer { flex: 1 1 auto; }
-/* ---- ゲーム切替タブ(ロト7・ロト6・ミニロト)。選択中は文字を濃くし、短い下線を付ける ----
-   横向き:タイトル行の右側に重ねる(高さは増やさない) / 縦向き:タイトルの下に1行(下の縦向き用の指定) */
-#app-title { grid-row: 1; grid-column: 1 / -1; }
+/* ---- 1段目:左にゲーム切替ボタン(ロト7・ロト6・ミニロト)、右端にタイトル。縦向き・横向きとも同じ段 ----
+   選択中のボタンは「メモを開く」(.memo-btn)と同じ色(背景・枠 var(--accent)、文字 #fff)。未選択は淡いベージュ(var(--paper-alt))。
+   タイトルは切替ボタンの幅だけ左を空けて右寄せにするので、ボタンと重ならない(入りきらない幅では文字を小さくし、それでも足りなければ末尾を省略) */
+#app-title {
+  grid-row: 1; grid-column: 1 / -1;
+  justify-content: flex-end;
+  padding-left: calc(8px + 3 * var(--tab-w) + 2 * var(--tab-gap) + 10px);
+}
+#app-title > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 #game-tabs {
-  grid-row: 1; grid-column: 1 / -1; justify-self: end; align-self: stretch;
-  display: flex; align-items: stretch; gap: 2px; min-width: 0;
-  padding: 0 6px; background: var(--paper); position: relative; z-index: 1;
+  grid-row: 1; grid-column: 1 / -1; justify-self: start; align-self: center;
+  display: flex; gap: var(--tab-gap); min-width: 0;
+  padding-left: 8px; position: relative; z-index: 1;
 }
 .game-tab {
-  position: relative; flex: none; min-width: 52px; padding: 0 10px;
-  font: inherit; font-size: 14px; font-weight: 700; line-height: 1; white-space: nowrap;
-  color: var(--ink); opacity: .5; background: transparent; border: 0; touch-action: manipulation;
+  flex: none; width: var(--tab-w); height: 32px; padding: 0 4px;
+  font: inherit; font-size: 13px; font-weight: 800; line-height: 1; white-space: nowrap;
+  color: var(--ink); background: var(--paper-alt); border: 1px solid var(--line); border-radius: 8px;
+  touch-action: manipulation;
 }
-.game-tab[aria-selected="true"] { opacity: 1; }
-.game-tab[aria-selected="true"]::after {
-  content: ''; position: absolute; left: 50%; bottom: 2px; width: 18px; height: 3px; margin-left: -9px;
-  border-radius: 2px; background: var(--accent);
-}
-.game-tab:active { background: var(--paper-alt); }
+.game-tab[aria-selected="true"] { color: #fff; background: var(--accent); border-color: var(--accent); }
+.game-tab:active { filter: brightness(.9); }
 @media (orientation: portrait) {
-  :root { --stat-h: 112px; }   /* タイトル行(30) + タブ行(34) + 操作バー(48)。パネル・メモシート等の位置はこの変数から追従 */
-  #app { grid-template-rows: 30px 34px calc(var(--stat-h) - 64px) var(--pick-h) minmax(0, 1fr); }
-  #game-tabs { grid-row: 2; justify-self: start; padding: 0 4px; }
+  /* 縦向きは横幅が足りないことがあるので、タイトルの文字を画面幅に合わせて少し小さくする(15px〜11px) */
+  #app-title { font-size: clamp(11px, calc((100vw - 3 * var(--tab-w) - 2 * var(--tab-gap) - 44px) / 11), 15px); }
 }
 /* 切替中の「読み込み中…」。画面全体を覆って操作を止める */
 #game-loading {
@@ -237,6 +241,9 @@ body { position: fixed; inset: 0; width: 100%; }
   color: var(--ink); background: var(--paper-alt); border: 1px solid var(--ink); border-radius: 8px;
   touch-action: manipulation;
 }
+/* 縮尺ボタン(−・＋):高さを抑えて少し横長に。文字も少し小さく(歯車など他の .icon-btn は従来どおり) */
+#zoom-out, #zoom-in { width: 52px; height: 34px; font-size: 18px; }
+#zoom-in { margin-left: 2px; }   /* 2つのボタンの間隔(操作バーの間隔6px + 2px) */
 .icon-btn:active:not(:disabled) { background: var(--line); }
 .icon-btn:disabled { opacity: .35; }
 .icon-btn[aria-expanded="true"] { background: var(--ink); color: #fff; }
@@ -550,13 +557,15 @@ body { position: fixed; inset: 0; width: 100%; }
 @media (orientation: landscape) and (max-height: 500px) and (min-width: 656px) {
   :root { --pick-h: 0px; }   /* 選択数字バーの行がなくなる(パネル・トースト・メモシートの位置はこの変数から追従) */
   #app {
-    grid-template-columns: 44px 44px minmax(0, 1fr) auto minmax(0, 1fr) auto auto 40px 44px;   /* 旧「7」表示の列(36px)は削除 */
-    grid-template-rows: 30px 48px minmax(0, 1fr);   /* タイトル(従来どおり残す) / 操作行 / 出目表 */
+    grid-template-columns: 52px 54px minmax(0, 1fr) auto minmax(0, 1fr) auto auto 40px 44px;   /* 旧「7」表示の列(36px)は削除。縮尺ボタン(52px)の列 */
+    grid-template-rows: 36px 48px minmax(0, 1fr);   /* 1段目(切替ボタン・タイトル) / 操作行 / 出目表 */
     column-gap: 6px;
     padding-left: calc(env(safe-area-inset-left, 0px) + 8px);
     padding-right: calc(env(safe-area-inset-right, 0px) + 8px);
   }
   #app-title { grid-column: 1 / -1; grid-row: 1; }
+  #game-tabs { padding-left: 0; }   /* 横向きは #app 側に左右の余白がある */
+  #app-title { padding-right: 0; }  /* タイトルの右端を歯車ボタンの右端にそろえる */
   #status-bar, #selection-bar { display: contents; }
   .bar-spacer { display: none; }
   #zoom-out { grid-area: 2 / 1; align-self: center; }
