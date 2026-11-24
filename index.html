@@ -15,22 +15,56 @@
 </head>
 <body>
 <div id="app">
-  <!-- タイトル行：正式名称を控えめに表示 -->
-  <div id="app-title"><span>ロト予想、置いてみた。</span></div>
-  <!-- ゲーム切替ボタン(ロト7・ロト6・ミニロト。ボタンは app.js が設定から作る)。縦向き・横向きとも1段目の左側(タイトルは同じ段の右端) -->
-  <nav id="game-tabs" role="tablist" aria-label="ゲームの切り替え"></nav>
-  <!-- A. 操作バー(上部固定):縮小・拡大 / (右寄せ)メモを開く / 設定(歯車) -->
-  <div id="status-bar">
-    <button id="zoom-out" class="icon-btn" type="button" aria-label="縮小">−</button>
-    <button id="zoom-in" class="icon-btn" type="button" aria-label="拡大">＋</button>
-    <span class="bar-spacer"></span>
-    <button id="memo-open" class="memo-btn" type="button" aria-expanded="false" aria-controls="memo-screen">メモを開く</button>
+  <!-- ヘッダー:縦向き=1段目 ゲーム切替ボタン(左)・設定(右端) / 2段目 タイトル・ロゴ。横向き=タイトル・ロゴ → 切替ボタン → 設定 を1行 -->
+  <header id="app-header">
+    <!-- ゲーム切替ボタン(ロト7・ロト6・ミニロト。ボタンは app.js が設定から作る) -->
+    <nav id="game-tabs" role="tablist" aria-label="ゲームの切り替え"></nav>
+    <!-- タイトル・ロゴ:舵輪・帆船・鳥・波はそれぞれ独立したSVG部品(大きさ・位置は style.css の --logo-* で個別に調整)。タイトルは文字のまま -->
+    <div id="app-title">
+      <svg id="logo-wheel" class="logo-part" viewBox="0 0 40 40" aria-hidden="true">
+        <g fill="none" stroke="currentColor" stroke-linecap="round">
+          <circle cx="20" cy="20" r="11" stroke-width="3"/>
+          <circle cx="20" cy="20" r="7" stroke-width="1.3"/>
+          <path stroke-width="2.4" d="M20 3v34M3 20h34M8 8l24 24M32 8 8 32"/>
+        </g>
+        <g fill="currentColor">
+          <circle cx="20" cy="20" r="3.6"/>
+          <circle cx="20" cy="2.6" r="2.4"/><circle cx="20" cy="37.4" r="2.4"/><circle cx="2.6" cy="20" r="2.4"/><circle cx="37.4" cy="20" r="2.4"/>
+          <circle cx="7.7" cy="7.7" r="2.4"/><circle cx="32.3" cy="32.3" r="2.4"/><circle cx="32.3" cy="7.7" r="2.4"/><circle cx="7.7" cy="32.3" r="2.4"/>
+        </g>
+      </svg>
+      <span>ロト予想、置いてみた。</span>
+      <svg id="logo-birds" class="logo-part" viewBox="0 0 30 16" aria-hidden="true">
+        <path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" d="M2 10Q5.5 5.5 8 9.2Q10.5 5.5 14 10M17 5.6Q19.6 2.4 21.6 5Q23.6 2.4 26.2 5.6"/>
+      </svg>
+      <svg id="logo-ship" class="logo-part" viewBox="0 0 60 48" aria-hidden="true">
+        <g fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round">
+          <path d="M18 9v24M30 3v30M42 9v24M49 33l9-5"/>
+        </g>
+        <g class="logo-sail" stroke="currentColor" stroke-width=".9" stroke-linejoin="round">
+          <path d="M14 13Q18 12 22 13L21.6 20Q18 21 14.4 20Z"/>
+          <path d="M13.6 22Q18 21 22.4 22L22 29.5Q18 30.5 14 29.5Z"/>
+          <path d="M23 8Q30 6 37 8L36.2 16Q30 18 23.8 16Z"/>
+          <path d="M22.4 18.5Q30 16.5 37.6 18.5L37 28.5Q30 30.5 23 28.5Z"/>
+          <path d="M37.4 12Q42 10.6 46.6 12L46.2 19Q42 20.4 37.8 19Z"/>
+          <path d="M37 21Q42 19.6 47 21L46.6 29Q42 30.4 37.4 29Z"/>
+          <path d="M47 11L57 28.6 48.5 28Z"/>
+        </g>
+        <path class="logo-flag" d="M30 3l5.5 1.6L30 6.2Z"/>
+        <path fill="currentColor" d="M5 33h50l-5.5 8.5Q30 45 10.5 41.5ZM5 33v-4.5h9.5V33Z"/>
+      </svg>
+      <svg id="logo-wave" class="logo-part" viewBox="0 0 200 12" preserveAspectRatio="none" aria-hidden="true">
+        <path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" d="M2 7Q14.5 2.5 27 7T52 7T77 7T102 7T127 7T152 7T177 7T198 7"/>
+        <path fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" opacity=".5" d="M30 10.5Q42 7.5 54 10.5T78 10.5T102 10.5T126 10.5T150 10.5"/>
+      </svg>
+    </div>
+    <!-- 設定(歯車):ヘッダーの右端 -->
     <button id="settings-btn" class="icon-btn icon-bare" type="button" aria-label="設定" aria-expanded="false" aria-controls="settings-panel">
       <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
     </button>
     <input id="csv-input" class="file-hidden" type="file" accept=".csv,text/csv,text/comma-separated-values,.txt" aria-label="CSVファイルを選択">
-  </div>
-  <!-- 設定パネル(操作バーの下に重ねて表示。レイアウトには影響しない) -->
+  </header>
+  <!-- 設定パネル(ヘッダーの下に重ねて表示。レイアウトには影響しない) -->
   <div id="settings-backdrop" hidden></div>
   <div id="settings-panel" role="dialog" aria-label="設定" hidden>
     <div class="cp-head">
@@ -116,23 +150,6 @@
     </div>
     <div id="csv-msg-body"></div>
   </div>
-  <!-- B. 選択数字エリア(操作バーの直下・固定):選択中の数字(枠はゲームの本数字の数。app.js が7枠から余分を外す)/ メモに追加 / クリア -->
-  <div id="selection-bar">
-    <div id="picked" aria-label="選択した数字">
-      <span class="chip-slot" data-slot="0"></span>
-      <span class="chip-slot" data-slot="1"></span>
-      <span class="chip-slot" data-slot="2"></span>
-      <span class="chip-slot" data-slot="3"></span>
-      <span class="chip-slot" data-slot="4"></span>
-      <span class="chip-slot" data-slot="5"></span>
-      <span class="chip-slot" data-slot="6"></span>
-    </div>
-    <span id="selection-msg" role="status" aria-live="polite"></span>
-    <button id="memo-add" type="button" aria-label="選択中の7数字を予想メモに追加">メモに追加</button>
-    <button id="clear-btn" type="button" aria-label="選択をすべて解除" disabled>
-      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"></path><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"></path><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path></svg>
-    </button>
-  </div>
   <!-- C. 出目表・数字タップ欄(1つのスクロール領域。縦横とも #work がスクロールし、全行が同じ横位置を共有する) -->
   <main id="work" aria-label="出目表と数字選択">
     <div id="work-inner">
@@ -141,6 +158,33 @@
       <div id="pred-wrap"><div id="pred-row" class="row pred"></div></div>
     </div>
   </main>
+  <!-- 操作エリア(画面最下段に固定・縮尺の影響を受けない)。並び:縮尺 −・＋ → 選択数字 → メモを開く → メモに追加 → 削除
+       縦向き:1行目 −・＋/選択数字、2行目 メモを開く/メモに追加/削除。横向き・PC:1行 -->
+  <footer id="dock">
+    <div id="dock-zoom">
+      <button id="zoom-out" class="icon-btn" type="button" aria-label="縮小">−</button>
+      <button id="zoom-in" class="icon-btn" type="button" aria-label="拡大">＋</button>
+    </div>
+    <div id="selection-bar">
+      <div id="picked" aria-label="選択した数字">
+        <span class="chip-slot" data-slot="0"></span>
+        <span class="chip-slot" data-slot="1"></span>
+        <span class="chip-slot" data-slot="2"></span>
+        <span class="chip-slot" data-slot="3"></span>
+        <span class="chip-slot" data-slot="4"></span>
+        <span class="chip-slot" data-slot="5"></span>
+        <span class="chip-slot" data-slot="6"></span>
+      </div>
+      <span id="selection-msg" role="status" aria-live="polite"></span>
+    </div>
+    <div id="dock-memo">
+      <button id="memo-open" class="memo-btn" type="button" aria-expanded="false" aria-controls="memo-screen">メモを開く</button>
+      <button id="memo-add" type="button" aria-label="選択中の7数字を予想メモに追加">メモに追加</button>
+      <button id="clear-btn" type="button" aria-label="選択をすべて解除" disabled>
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"></path><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"></path><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path></svg>
+    </button>
+    </div>
+  </footer>
   <!-- 予想メモ(下からせり上がるボトムシート。出目表のスクロール位置・縮尺・選択は保たれる) -->
   <section id="memo-screen" aria-label="予想メモ" hidden>
     <div id="memo-top">

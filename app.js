@@ -133,7 +133,7 @@
       var row = el('row data');
       if (d.date) row.dataset.date = d.date;
       var roundCell = el('round two');   // 縦2段: 上=開催回、下=開催日
-      roundCell.appendChild(el('rd-no', '第' + d.round + '回'));
+      roundCell.appendChild(el('rd-no', String(d.round)));   // 開催回は数字だけ表示(データは変更しない)
       roundCell.appendChild(el('rd-date', shortDate(d.date)));
       buildRow(row, roundCell, function (c) {
         var main = !!d.nums[c], bonus = !!d.bonus[c], hit = main || bonus;
