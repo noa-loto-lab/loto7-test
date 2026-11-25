@@ -13,11 +13,9 @@
   /* 改善C: 数字マスの上下に広げるタップ領域(見た目は変えない)。縮尺が小さいほど効く(旧版比 40%で約1.5倍・50%で約1.4倍)。
      上は予想欄の上余白(7px)、下は予想欄の下余白に収める。上限6px。 */
   --tap-ext: min(calc(10px * var(--z)), 6px);
-  --stat-h: 84px;                     /* ヘッダーの高さ(縦向き:切替ボタン・設定 44px＋タイトル・ロゴ 40px)。パネル・トースト・予想メモの位置はこの変数から追従 */
-  --tab-w: 62px;                      /* ゲーム切替ボタン1個の幅(3個とも同じ) */
-  --tab-gap: 6px;                     /* ゲーム切替ボタンの間隔 */
+  --stat-h: 76px;                     /* ヘッダーの高さ(縦向き:タイトル・ロゴ・設定 44px＋ゲーム選択 32px)。パネル・トースト・予想メモの位置はこの変数から追従 */
   --pick-h: 0px;                      /* 上部の選択数字エリアは最下段の操作エリアへ移ったので0(位置計算の式で使うため変数は残す) */
-  --dock-h: calc(104px + env(safe-area-inset-bottom, 0px));   /* 最下段の操作エリアの高さ(縦向き:2行。ホームバーの余白を含む)。予想メモの下端もこの値 */
+  --dock-h: calc(108px + env(safe-area-inset-bottom, 0px));   /* 最下段の操作エリアの高さ(縦向き:上段52px＋下段32px＋余白。ホームバーの余白を含む)。予想メモの下端もこの値 */
   --ctl-h: 44px;                      /* 操作ボタンの高さ(−・＋・メモを開く・メモに追加で共通) */
   --chip: 22px;                       /* 選択数字の枠(固定7枠) */
 
@@ -53,11 +51,12 @@
   --logo-ink: #6e4527;  /* 舵輪・帆船・鳥の茶 */
   --sail: #fbf5e7;      /* 帆 */
   /* ロゴ部品の大きさ(個別に調整できる) */
-  --title-size: 16px;
-  --logo-wheel: 26px;
-  --logo-ship: 36px;
-  --logo-birds: 20px;
-  --logo-wave-h: 8px;
+  --title-size: 17px;   /* タイトルは少し存在感を上げる */
+  --logo-wheel: 22px;   /* 舵輪は控えめに */
+  --logo-ship: 38px;    /* 帆船は小さくしすぎない */
+  --logo-birds: 18px;
+  --logo-wave-h: 6px;   /* 波は控えめに */
+  --work-bg: #efe8d8;   /* 出目表の下の空白部分(淡いベージュ)。表の部分は従来の紙色のまま */
 }
 
 * { box-sizing: border-box; }
@@ -99,10 +98,10 @@ body { position: fixed; inset: 0; width: 100%; }
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
-  background: var(--paper);
+  background: var(--work-bg);   /* 表の下に残る空白部分は淡いベージュ */
 }
 #work::-webkit-scrollbar { display: none; }
-#work-inner { width: max-content; min-width: 100%; }
+#work-inner { width: max-content; min-width: 100%; background: var(--paper); }   /* 出目表・次回予想欄の部分は従来の紙色 */
 /* 数字見出しは縦スクロール中も上端に固定する */
 #head-row { position: sticky; top: 0; z-index: 4; background: var(--paper); }
 
@@ -183,7 +182,7 @@ body { position: fixed; inset: 0; width: 100%; }
   box-shadow: inset 0 0 0 max(1px, calc(2px * var(--z))) var(--sel-ink);   /* 色だけに頼らず、枠でも区別 */
 }
 
-/* ---- ヘッダー:縦向き=1段目 切替ボタン(左)・設定(右端) / 2段目 タイトル・ロゴ。横向き=1行(下の横向き用の指定) ---- */
+/* ---- ヘッダー:縦向き=1段目 タイトル・ロゴ(左)・設定(右) / 2段目 ゲーム選択(右寄せ)。横向き=1行(下の横向き用の指定) ---- */
 #app-header {
   grid-row: 1;
   display: flex; flex-wrap: wrap; align-items: center; align-content: flex-start;
@@ -193,9 +192,10 @@ body { position: fixed; inset: 0; width: 100%; }
   border-bottom: 1px solid var(--line);
   overflow: hidden;
 }
-#game-tabs { order: 1; display: flex; gap: var(--tab-gap); min-width: 0; }
-#settings-btn { order: 2; margin-left: auto; }
-#app-title { order: 3; flex: 0 0 100%; height: calc(var(--stat-h) - 45px); justify-content: center; }
+#app-title { order: 1; flex: 1 1 0; height: 44px; justify-content: flex-start; }
+#settings-btn { order: 2; margin-left: 4px; }
+#game-select { order: 3; margin: 0 6px 0 auto; }   /* 2段目の右寄せ(設定ボタンの下) */
+#app-header::after { content: ''; order: 2; flex: 0 0 100%; height: 0; }   /* 設定ボタンの後ろで改行してゲーム選択を2段目へ */
 /* タイトル・ロゴ:舵輪 → タイトル(明朝) → 鳥 → 帆船。波はタイトルの下に控えめに重ねる */
 #app-title {
   position: relative;
@@ -223,19 +223,17 @@ body { position: fixed; inset: 0; width: 100%; }
 .logo-sail { fill: var(--sail); }
 .logo-flag { fill: var(--accent); }
 #logo-wave {
-  position: absolute; z-index: 0; bottom: 2px; height: var(--logo-wave-h);
+  position: absolute; z-index: 0; bottom: 3px; height: var(--logo-wave-h); opacity: .8;
   left: calc(var(--logo-wheel) + 4px); width: calc(100% - var(--logo-wheel) - 4px - var(--logo-ship) * .3);
   color: var(--wave);
 }
-/* ゲーム切替ボタン:3つとも同じ大きさ。選択中はオレンジ(--accent)、未選択は淡いベージュ */
-.game-tab {
-  flex: none; width: var(--tab-w); height: 32px; padding: 0 4px;
-  font: inherit; font-size: 13px; font-weight: 800; line-height: 1; white-space: nowrap;
-  color: var(--ink); background: var(--paper-alt); border: 1px solid var(--line); border-radius: 8px;
+/* ゲーム選択:標準のセレクトボックス。文字は16px(iPhone Safari で選んだときに画面が拡大されないよう16px以上) */
+#game-select {
+  flex: none; width: 100px; height: 28px; padding: 0 6px;
+  font: inherit; font-size: 16px; font-weight: 700; color: var(--ink);
+  background-color: var(--paper-alt); border: 1px solid var(--line); border-radius: 6px;
   touch-action: manipulation;
 }
-.game-tab[aria-selected="true"] { color: #fff; background: var(--accent); border-color: var(--accent); }
-.game-tab:active { filter: brightness(.9); }
 /* 切替中の「読み込み中…」。画面全体を覆って操作を止める */
 #game-loading {
   position: absolute; inset: 0; z-index: 200; display: flex; align-items: center; justify-content: center;
@@ -257,9 +255,9 @@ body { position: fixed; inset: 0; width: 100%; }
   color: var(--ink); background: var(--paper-alt); border: 1px solid var(--ink); border-radius: 8px;
   touch-action: manipulation;
 }
-/* 縮尺ボタン(−・＋):低めで少し横長。操作エリアではクリーム色のボタン面(歯車など他の .icon-btn は従来どおり) */
+/* 縮尺ボタン(−・＋):低めで横長。操作エリアではクリーム色のボタン面(歯車など他の .icon-btn は従来どおり) */
 #zoom-out, #zoom-in {
-  width: 52px; height: 34px; font-size: 18px;
+  width: 52px; height: 32px; font-size: 18px;
   color: var(--cream-ink); background: var(--cream); border-color: var(--cream-edge);
   box-shadow: 0 2px 0 rgba(0, 0, 0, .35);
 }
@@ -283,15 +281,13 @@ body { position: fixed; inset: 0; width: 100%; }
 #memo-open[aria-expanded="true"] { background: var(--cream-edge); border-color: var(--cream-ink); }   /* 予想メモを開いている間 */
 
 /* ---- 操作エリア(画面最下段に固定):濃い茶色の控えめな木目・埋め込み式の金具・クリーム色のボタン面 ----
-   縦向き:1行目 −・＋ / 選択数字、2行目 メモを開く / メモに追加 / 削除。横向き・PCは1行(下の横向き用の指定) */
+   縦向き:上段(52px) メモを開く : 選択数字 : メモに追加 ≒ 1 : 2 : 1(選択数字は枠の幅、残りを2つのメモボタンで等分)
+          下段(32px) 縮尺 − / 縮尺 ＋(広め) / 削除(小さめ)。横向き・PCは上段と下段を1行に並べる(下の横向き用の指定) */
 #dock {
   grid-row: 3;
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  grid-template-rows: 36px var(--ctl-h);
-  grid-template-areas: "zoom pick" "memo memo";
-  align-items: center;
-  gap: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   min-width: 0;
   padding: 8px calc(env(safe-area-inset-right, 0px) + 18px) calc(env(safe-area-inset-bottom, 0px) + 8px) calc(env(safe-area-inset-left, 0px) + 18px);
   border-top: 2px solid var(--wood-edge);
@@ -304,14 +300,16 @@ body { position: fixed; inset: 0; width: 100%; }
     repeating-linear-gradient(180deg, rgba(0, 0, 0, .07) 0 1px, transparent 1px 6px, rgba(255, 255, 255, .035) 6px 7px, transparent 7px 13px),
     linear-gradient(180deg, var(--wood-2), var(--wood-1));
 }
-#dock-zoom { grid-area: zoom; display: flex; gap: 8px; }
-#dock-memo { grid-area: memo; display: flex; align-items: center; gap: 8px; min-width: 0; }
+#dock-main { flex: none; display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 8px; height: 52px; min-width: 0; }
+#dock-sub { flex: none; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 56px; gap: 8px; height: 32px; min-width: 0; }
+#dock-main .memo-btn, #dock-main #memo-add { width: 100%; min-width: 0; height: 100%; padding: 0 4px; border-radius: 26px; }   /* 丸いボタンの形はそのまま(高さ52pxに合わせた角丸)。ラベルが1行に収まるよう内側の余白は小さめ */
+@media (orientation: portrait) and (max-width: 389px) { #dock-main .memo-btn, #dock-main #memo-add { font-size: 13px; } }
+#dock-sub #zoom-out, #dock-sub #zoom-in { width: 100%; height: 100%; }   /* 縮尺ボタンは横長(角の形は従来どおり) */
+#dock-sub #clear-btn { width: 100%; height: 100%; margin-left: 0; }       /* 削除は小さめ(枠線・角の形は従来どおり) */
 #selection-bar {
-  grid-area: pick;
   position: relative;
   display: flex;
-  align-items: flex-start;
-  align-self: stretch;
+  align-items: center;
   min-width: 0;
   white-space: nowrap;
 }
@@ -599,39 +597,40 @@ body { position: fixed; inset: 0; width: 100%; }
 
 /* ================= 画面の向き・PC 別のレイアウト ================= */
 
-/* ---- 縦向き:ごく狭い画面(320px幅)は操作エリアの余白と縮尺ボタンを詰める ---- */
-@media (orientation: portrait) and (max-width: 359px) {
-  #dock { column-gap: 10px; padding-left: calc(env(safe-area-inset-left, 0px) + 12px); padding-right: calc(env(safe-area-inset-right, 0px) + 12px); }
-  #zoom-out, #zoom-in { width: 46px; }
-  :root { --title-size: 14px; --logo-wheel: 24px; --logo-ship: 32px; --logo-birds: 18px; }
+/* ---- 縦向き:ごく狭い画面(320px幅)は、メモボタンのラベルを2行にする(数字枠の大きさは変えない) ---- */
+@media (orientation: portrait) and (max-width: 371px) {
+  #dock { padding-left: calc(env(safe-area-inset-left, 0px) + 12px); padding-right: calc(env(safe-area-inset-right, 0px) + 12px); }
+  #dock-main .memo-btn, #dock-main #memo-add { padding: 0 3px; font-size: 13px; line-height: 1.2; white-space: normal; }   /* 「メモを / 開く」「メモに / 追加」の2行 */
+  :root { --title-size: 15px; --logo-wheel: 20px; --logo-ship: 34px; --logo-birds: 16px; }
 }
 
-/* ---- 横向き:ヘッダーを1行(タイトル・ロゴ → 切替ボタン → 設定)、操作エリアを1行の薄い形に ---- */
+/* ---- 横向き:ヘッダーを1行(タイトル・ロゴ → ゲーム選択 → 設定)、操作エリアを1行の薄い形に ---- */
 @media (orientation: landscape) {
   :root {
     --stat-h: 44px;
     --dock-h: calc(56px + env(safe-area-inset-bottom, 0px));
-    --title-size: 15px; --logo-wheel: 24px; --logo-ship: 32px; --logo-birds: 18px; --logo-wave-h: 7px;
+    --title-size: 16px; --logo-wheel: 20px; --logo-ship: 36px; --logo-birds: 16px; --logo-wave-h: 6px;
   }
   #app-header { flex-wrap: nowrap; align-content: center; padding-left: calc(env(safe-area-inset-left, 0px) + 12px); padding-right: calc(env(safe-area-inset-right, 0px) + 6px); }
-  #app-title { order: 1; flex: 0 1 auto; height: 100%; justify-content: flex-start; }
-  #game-tabs { order: 2; margin-left: auto; padding-left: 12px; }
+  #app-header::after { display: none; }
+  #app-title { order: 1; flex: 0 1 auto; height: 100%; }
+  #game-select { order: 2; margin: 0 0 0 auto; }
   #settings-btn { order: 3; margin-left: 10px; }
-  /* 操作エリア:−・＋ | 選択数字(中央) | メモを開く・メモに追加・削除 */
+  /* 操作エリア:メモを開く・選択数字・メモに追加 | 縮尺 −・＋・削除(低め) を1行に */
   #dock {
-    grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr) auto;
-    grid-template-rows: var(--ctl-h);
-    grid-template-areas: "zoom . pick . memo";
-    column-gap: 10px;
+    flex-direction: row; align-items: center; justify-content: space-between; gap: 16px;
     padding: 6px calc(env(safe-area-inset-right, 0px) + 20px) calc(env(safe-area-inset-bottom, 0px) + 6px) calc(env(safe-area-inset-left, 0px) + 20px);
   }
-  #selection-bar { align-items: center; }
-  #clear-btn { margin-left: 0; }
+  #dock-main { grid-template-columns: auto auto auto; gap: 10px; height: var(--ctl-h); }
+  #dock-main .memo-btn, #dock-main #memo-add { width: auto; min-width: 96px; border-radius: calc(var(--ctl-h) / 2); }
+  #dock-sub { grid-template-columns: 52px 52px 44px; height: 32px; }
 }
 /* 横向きで横幅が狭い画面(iPhone SE など):操作エリアの余白とメモ系ボタンの幅を詰める */
 @media (orientation: landscape) and (max-width: 699px) {
-  #dock { column-gap: 6px; padding-left: calc(env(safe-area-inset-left, 0px) + 14px); padding-right: calc(env(safe-area-inset-right, 0px) + 14px); }
-  .memo-btn, #memo-add { min-width: 84px; padding: 0 10px; }
+  #dock { gap: 8px; padding-left: calc(env(safe-area-inset-left, 0px) + 14px); padding-right: calc(env(safe-area-inset-right, 0px) + 14px); }
+  #dock-main { gap: 6px; }
+  #dock-main .memo-btn, #dock-main #memo-add { min-width: 84px; padding: 0 10px; }
+  #dock-sub { grid-template-columns: 46px 46px 40px; gap: 6px; }
 }
 
 /* ---- PC:画面いっぱいに広げず中央に配置し、左右に余白(背景色)を残す ---- */

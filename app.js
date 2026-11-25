@@ -1683,20 +1683,22 @@
   // 抽選データが0件のゲームは失敗ではなく「空データ」として切り替える。
   // ======================================================================
   memoAddBtn.setAttribute('aria-label', '選択中の' + MAX_SELECT + '数字を予想メモに追加');   // ロト7は従来と同じ文言
-  var gameTabsEl = document.getElementById('game-tabs');
+  var gameSelectEl = document.getElementById('game-select');
   var gameLoadingEl = document.getElementById('game-loading');
   var SWITCH_TIMEOUT_MS = 8000;
   var switching = false;
+  // ゲーム選択(セレクトボックス):選択肢は設定から作り、選んだら従来と同じ switchGame で切り替える。
+  // 切り替えなかった・切り替えに失敗したときは、表示を今のゲームに戻す
   GAME_ORDER.forEach(function (id) {
-    var b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'game-tab';
-    b.dataset.game = id;
-    b.setAttribute('role', 'tab');
-    b.setAttribute('aria-selected', id === CFG.id ? 'true' : 'false');
-    b.textContent = LOTTERY_CONFIG[id].label;
-    b.addEventListener('click', function () { switchGame(id); });
-    gameTabsEl.appendChild(b);
+    var o = document.createElement('option');
+    o.value = id;
+    o.textContent = LOTTERY_CONFIG[id].label;
+    gameSelectEl.appendChild(o);
+  });
+  gameSelectEl.value = CFG.id;
+  gameSelectEl.addEventListener('change', function () {
+    switchGame(gameSelectEl.value);
+    if (!switching) gameSelectEl.value = CFG.id;
   });
   function readGameData(id) {   // 切替先の保存データを読むだけ(書き込みはしない)。解決値は件数の確認用
     var lot = LOTTERY_CONFIG[id].id;
@@ -1744,6 +1746,7 @@
     }).catch(function (e) {
       gameLoadingEl.hidden = true;
       switching = false;
+      gameSelectEl.value = CFG.id;   // セレクトボックスの表示を今のゲームに戻す
       var reason = e && e.message && /[ぁ-んァ-ン一-龥]/.test(e.message) ? e.message : '保存データを読み込めませんでした。';
       showMsg(true, target.label + 'に切り替えられませんでした', [reason, CFG.label + 'のまま表示しています。どちらのゲームのデータも変更していません。', 'もう一度「' + target.label + '」を押すと再試行します。']);
     });

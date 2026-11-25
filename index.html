@@ -15,10 +15,10 @@
 </head>
 <body>
 <div id="app">
-  <!-- ヘッダー:縦向き=1段目 ゲーム切替ボタン(左)・設定(右端) / 2段目 タイトル・ロゴ。横向き=タイトル・ロゴ → 切替ボタン → 設定 を1行 -->
+  <!-- ヘッダー:縦向き=1段目 タイトル・ロゴ(左)・設定(右) / 2段目 ゲーム選択(右寄せ)。横向き=タイトル・ロゴ → ゲーム選択 → 設定 を1行 -->
   <header id="app-header">
-    <!-- ゲーム切替ボタン(ロト7・ロト6・ミニロト。ボタンは app.js が設定から作る) -->
-    <nav id="game-tabs" role="tablist" aria-label="ゲームの切り替え"></nav>
+    <!-- ゲーム選択(標準のセレクトボックス。選択肢 ロト7・ロト6・ミニロト は app.js が設定から作る) -->
+    <select id="game-select" aria-label="ゲームの切り替え"></select>
     <!-- タイトル・ロゴ:舵輪・帆船・鳥・波はそれぞれ独立したSVG部品(大きさ・位置は style.css の --logo-* で個別に調整)。タイトルは文字のまま -->
     <div id="app-title">
       <svg id="logo-wheel" class="logo-part" viewBox="0 0 40 40" aria-hidden="true">
@@ -158,14 +158,12 @@
       <div id="pred-wrap"><div id="pred-row" class="row pred"></div></div>
     </div>
   </main>
-  <!-- 操作エリア(画面最下段に固定・縮尺の影響を受けない)。並び:縮尺 −・＋ → 選択数字 → メモを開く → メモに追加 → 削除
-       縦向き:1行目 −・＋/選択数字、2行目 メモを開く/メモに追加/削除。横向き・PC:1行 -->
+  <!-- 操作エリア(画面最下段に固定・縮尺の影響を受けない)
+       縦向き:上段(高さ52px) メモを開く / 選択数字 / メモに追加、下段(高さ32px) 縮尺 − / 縮尺 ＋ / 削除。横向き・PC:上段と下段を1行に並べる -->
   <footer id="dock">
-    <div id="dock-zoom">
-      <button id="zoom-out" class="icon-btn" type="button" aria-label="縮小">−</button>
-      <button id="zoom-in" class="icon-btn" type="button" aria-label="拡大">＋</button>
-    </div>
-    <div id="selection-bar">
+    <div id="dock-main">
+      <button id="memo-open" class="memo-btn" type="button" aria-expanded="false" aria-controls="memo-screen">メモを開く</button>
+      <div id="selection-bar">
       <div id="picked" aria-label="選択した数字">
         <span class="chip-slot" data-slot="0"></span>
         <span class="chip-slot" data-slot="1"></span>
@@ -177,9 +175,11 @@
       </div>
       <span id="selection-msg" role="status" aria-live="polite"></span>
     </div>
-    <div id="dock-memo">
-      <button id="memo-open" class="memo-btn" type="button" aria-expanded="false" aria-controls="memo-screen">メモを開く</button>
       <button id="memo-add" type="button" aria-label="選択中の7数字を予想メモに追加">メモに追加</button>
+    </div>
+    <div id="dock-sub">
+      <button id="zoom-out" class="icon-btn" type="button" aria-label="縮小">−</button>
+      <button id="zoom-in" class="icon-btn" type="button" aria-label="拡大">＋</button>
       <button id="clear-btn" type="button" aria-label="選択をすべて解除" disabled>
       <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"></path><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"></path><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path></svg>
     </button>
