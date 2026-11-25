@@ -281,6 +281,12 @@
     s.src = 'app.js';
     s.onerror = function () { showError('アプリ本体(app.js)を読み込めませんでした。'); };
     document.body.appendChild(s);
+    // 調査用:画面回転後のタッチ位置ずれの診断表示(テスト環境だけ。読み込めなくてもアプリの動作には影響しない)
+    if (env === 'test') {
+      var d = document.createElement('script');
+      d.src = 'diag.js';
+      document.body.appendChild(d);
+    }
   }).catch(function (e) {
     clearTimeout(timer);
     showError(e instanceof Fail ? e.message : '環境設定ファイル(environment.json)を読み込めませんでした。');
