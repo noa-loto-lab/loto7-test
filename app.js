@@ -1803,4 +1803,30 @@
   // app.js は環境判定の後に読み込まれるため、ページの load がすでに終わっている場合はその場で実行する
   if (document.readyState === 'complete') toBottom(); else window.addEventListener('load', toBottom);
   window.addEventListener('orientationchange', function () { setTimeout(toBottom, 300); });
+
+  // ---- ホーム画面版対策:ページ全体のスクロール位置を先頭(0)へ戻す ----
+  // ホーム画面から起動して縦→横→縦と回転すると、ページ全体(window)が約47pxスクロールした状態で残り、
+  // 表示とタッチ位置がずれることがある(Loto7_16 の診断で scrollY=47 を確認)。このアプリのページ全体は本来スクロールしないため 0 へ戻す。
+  // ・対象は window のスクロールだけ。出目表(#work)やメモ一覧など、内側のスクロール位置には触れない。
+  // ・すでに 0 のときは何もしない(Safari 版の通常時は 0 なので動作は変わらない)。
+  // ・ページが拡大されているとき(拡大率が1でない)は、利用者の操作を妨げないよう何もしない。
+  // ・iOS は回転後に画面の大きさ・位置を少し遅れて更新するため、回転・リサイズの直後と、少し時間をおいて何度か確認する。
+  function resetPageScroll() {
+    var vv = window.visualViewport;
+    if (vv && Math.abs(vv.scale - 1) > 0.01) return;
+    var x = window.scrollX || window.pageXOffset || 0, y = window.scrollY || window.pageYOffset || 0;
+    if (x !== 0 || y !== 0) window.scrollTo(0, 0);
+  }
+  var pageScrollTimers = [];
+  function schedulePageScrollReset() {
+    for (var i = 0; i < pageScrollTimers.length; i++) clearTimeout(pageScrollTimers[i]);
+    pageScrollTimers = [];
+    resetPageScroll();
+    [50, 150, 300, 600, 1000].forEach(function (ms) { pageScrollTimers.push(setTimeout(resetPageScroll, ms)); });
+  }
+  window.addEventListener('orientationchange', schedulePageScrollReset);
+  window.addEventListener('resize', schedulePageScrollReset);
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', schedulePageScrollReset);
+  // 回転以外のきっかけでページ全体がずれた場合にも戻す(window の scroll は内側の要素のスクロールでは発生しない)
+  window.addEventListener('scroll', resetPageScroll, { passive: true });
 })();
