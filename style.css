@@ -604,6 +604,17 @@ body { position: fixed; inset: 0; width: 100%; }
   :root { --title-size: 15px; --logo-wheel: 20px; --logo-ship: 34px; --logo-birds: 16px; }
 }
 
+/* ---- 縦向き(試作):ヘッダー上段=ゲーム選択(左)・設定(右) / 区切り線 / 下段=タイトル・ロゴ。高さは従来どおり 76px(上段40px+線1px+下段35px) ---- */
+@media (orientation: portrait) {
+  :root { --title-size: 15px; }   /* タイトルは少し小さく(従来 17px) */
+  #game-select { order: 1; margin: 0 auto 0 0; }   /* 上段の左 */
+  #settings-btn { order: 2; height: 40px; margin-left: 12px; }   /* 上段の右(押せる範囲は 44×40px) */
+  #app-header::after { order: 3; height: 1px; background: var(--line); }   /* 上段と下段の区切り線(ヘッダー下端の線と同じ色) */
+  #app-title { order: 4; flex: 0 1 auto; height: 35px; padding-right: calc(var(--logo-ship) * 1.2); }   /* 下段:舵輪・タイトル・鳥・帆船(並びは従来どおり) */
+  #logo-wave { width: calc(100% - var(--logo-wheel) - 4px); }   /* 波は帆船の右へ、船の幅ほど伸ばす */
+}
+@media (orientation: portrait) and (max-width: 371px) { :root { --title-size: 14px; } }   /* ごく狭い画面(従来 15px) */
+
 /* ---- 横向き:ヘッダーを1行(タイトル・ロゴ → ゲーム選択 → 設定)、操作エリアを1行の薄い形に ---- */
 @media (orientation: landscape) {
   :root {
