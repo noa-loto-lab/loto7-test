@@ -1,0 +1,543 @@
+/* 列幅の定義はここだけ。見出し・出目表・予想欄はすべてこの変数を使う */
+:root {
+  /* 縮尺:--z が倍率(1 = 100%)。JSが変更する。寸法はすべて --z を掛けた実寸で決める
+     (transformではなくレイアウトを変えるので、スクロール範囲とタップ位置が実寸どおりになる) */
+  --z: 1;
+
+  /* 列幅の定義はここだけ。見出し・出目表・予想欄はすべてこの変数を使う */
+  --round-w: calc(76px * var(--z));   /* 開催回の列 */
+  --cell-w: calc(44px * var(--z));    /* 数字マスの列 */
+  --cols: 37;
+  --head-h: calc(30px * var(--z));
+  --row-h: calc(44px * var(--z));
+  /* 改善C: 数字マスの上下に広げるタップ領域(見た目は変えない)。縮尺が小さいほど効く(旧版比 40%で約1.5倍・50%で約1.4倍)。
+     上は予想欄の上余白(7px)、下は予想欄の下余白に収める。上限6px。 */
+  --tap-ext: min(calc(10px * var(--z)), 6px);
+  --stat-h: 78px;                     /* タイトル行＋A 操作バー(上部固定) */
+  --pick-h: 48px;                     /* B 選択数字エリア(縮尺の対象外・上部固定)。メモ系ボタン(--ctl-h)が収まるよう操作バーと同じ高さ */
+  --ctl-h: 44px;                      /* 操作ボタンの高さ(−・＋・メモを開く・メモに追加で共通) */
+  --chip: 22px;                       /* 選択数字の枠(固定7枠) */
+
+  --fs-round: max(6px, calc(13px * var(--z)));
+  --fs-date: max(6px, calc(11px * var(--z)));   /* 開催日(下段) */
+  --fs-head: max(6px, calc(14px * var(--z)));
+  --fs-head-round: max(6px, calc(12px * var(--z)));
+  --fs-hit: max(6px, calc(14px * var(--z)));
+  --fs-sel: max(7px, calc(18px * var(--z)));
+
+  --paper: #f6f5f0;
+  --paper-alt: #ebe9e1;
+  --ink: #23262b;
+  --line: #cfccc0;
+  --main: #d3202c;    /* 本数字:赤(色設定で変更される) */
+  --bonus: #f5b700;   /* ボーナス数字:黄色(色設定で変更される) */
+  --main-ink: #ffffff;   /* 数字の文字色(背景色に合わせてJSが白/黒を選ぶ) */
+  --bonus-ink: #1b1b1b;
+  --sel: #d3202c;     /* 選択中は本数字と同じ色 */
+  --sel-ink: #1b1b1b;
+  --accent: #b5502d;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;              /* ページ全体のスクロールを止める */
+  overscroll-behavior: none;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  user-select: none;
+}
+body { position: fixed; inset: 0; width: 100%; }
+
+#app {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-rows: 30px calc(var(--stat-h) - 30px) var(--pick-h) minmax(0, 1fr);   /* タイトル / A 操作バー / B 選択数字 / C 出目表+数字タップ欄 */
+  /* 横向き時のノッチ・ホームバー対策 */
+  padding: 0 env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+}
+
+/* C. スクロール領域:見出し・出目表・数字タップ欄を1つの要素にまとめ、縦横ともここがスクロールする。
+   全行が同じ scrollLeft を共有するので、列の位置は常に揃う(同期の処理は不要) */
+#work {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  touch-action: pan-x pan-y;   /* 1本指のスクロールだけブラウザに任せる。2本指ピンチ(ページ拡大・ダブルタップ拡大)はブラウザに処理させず、app.js のピンチ処理が受け取る */
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  background: var(--paper);
+}
+#work::-webkit-scrollbar { display: none; }
+#work-inner { width: max-content; min-width: 100%; }
+/* 数字見出しは縦スクロール中も上端に固定する */
+#head-row { position: sticky; top: 0; z-index: 4; background: var(--paper); }
+
+
+/* 行・マス共通 */
+.row {
+  display: grid;
+  grid-template-columns: var(--round-w) repeat(var(--cols), var(--cell-w));
+  width: calc(var(--round-w) + var(--cols) * var(--cell-w));
+}
+.cell, .round {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.cell.k5 { background: transparent; border-right: 2px solid #8f8b80; } /* 9/19/29の右境界＝10/20/30の区切り */
+
+.round {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: var(--paper);
+  font-size: var(--fs-round);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  border-right: 2px solid var(--ink);
+}
+
+/* 改善D: 出目表の開催回欄を縦2段に(上=開催回、下=開催日)。行の高さ(--row-h)は変えない */
+.round.two { flex-direction: column; line-height: 1.1; }
+.round.two .rd-no { font-size: var(--fs-round); font-weight: 700; }
+.round.two .rd-date { font-size: var(--fs-date); font-weight: 500; letter-spacing: -0.02em; }
+
+/* A. 見出し */
+.row.head { height: var(--head-h); }
+.head .round, .head .cell { font-size: var(--fs-head); font-weight: 700; font-variant-numeric: tabular-nums; border-bottom: 2px solid var(--ink); }
+.head .round { font-size: var(--fs-head-round); }
+
+/* B. 出目表 */
+.row.data { height: var(--row-h); }
+.cell.hit { color: #fff; font-size: var(--fs-hit); font-weight: 700; font-variant-numeric: tabular-nums; }
+.cell.main { background: var(--main); color: var(--main-ink); }     /* 本数字 */
+.cell.bonus { background: var(--bonus); color: var(--bonus-ink); }   /* ボーナス数字 */
+
+/* C. 予想欄 */
+.row.pred { height: calc(48px * var(--z)); }
+#pred-wrap { padding-top: 7px; padding-bottom: 7px; }   /* 数字タップ欄は出目表の直下。下の安全領域は #app の余白が確保する */
+.pred .round, .pred .cell { border-top: 3px solid var(--accent); border-bottom: 0; background: var(--paper); }
+.pred .cell.k5 { background: transparent; border-right: 2px solid #8f8b80; }
+.pred .round { color: var(--accent); }
+
+/* ---- 第2段階:数字選択 ---- */
+.pred .cell[data-n] { cursor: pointer; touch-action: manipulation; }
+/* 改善C: 上下方向だけタップ領域を広げる(見えない領域)。左右はマスの幅ちょうどで、隣のマスとは重ならない。
+   top: 上端の枠3px + 拡張分 / right: 右の罫線(通常1px、10区切り2px)まで */
+.pred .cell[data-n] { position: relative; overflow: visible; }
+.pred .cell[data-n]::before {
+  content: '';
+  position: absolute;
+  top: calc(-3px - var(--tap-ext));
+  bottom: calc(-1 * var(--tap-ext));
+  left: 0;
+  right: -1px;
+}
+.pred .cell.k5[data-n]::before { right: -2px; }
+.pred .cell.sel {
+  background: var(--main);
+  color: var(--main-ink);
+  font-size: var(--fs-sel);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  box-shadow: inset 0 0 0 max(1px, calc(2px * var(--z))) var(--sel-ink);   /* 色だけに頼らず、枠でも区別 */
+}
+
+/* ---- アプリタイトル: シンプル・おしゃれ系。寸法・文字サイズ・行の高さは従来どおり ---- */
+#app-title {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  padding: 3px 10px 0;
+  background: var(--paper);
+  color: #3f2922;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: .05em;
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+}
+#app-title > span {
+  position: relative;
+  display: inline-block;
+  font-family: 'Noto Serif JP', serif;
+}
+
+/* ---- A. 操作バー(アイコンのみ) ---- */
+#status-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 2px 8px;
+  overflow: hidden;
+  background: var(--paper);
+  border-bottom: 1px solid var(--line);
+  position: relative;
+  white-space: nowrap;
+}
+.bar-spacer { flex: 1 1 auto; }
+#game-label {   /* ロト7の表示のみ(切り替え機能は当面なし) */
+  flex: none; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;
+  font-size: 20px; font-weight: 800; color: #fff; background: var(--ink); border-radius: 8px;
+}
+.icon-btn {
+  position: relative; flex: none; width: 44px; height: var(--ctl-h); padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  font: inherit; font-size: 22px; font-weight: 700; line-height: 1;
+  color: var(--ink); background: var(--paper-alt); border: 1px solid var(--ink); border-radius: 8px;
+  touch-action: manipulation;
+}
+.icon-btn:active:not(:disabled) { background: var(--line); }
+.icon-btn:disabled { opacity: .35; }
+.icon-btn[aria-expanded="true"] { background: var(--ink); color: #fff; }
+/* 歯車:外枠・背景をなくしてアイコンだけに見せる。大きさ(44×44)はそのままなので、タップできる範囲は従来と同じ */
+.icon-bare { background: transparent; border: 0; }
+.icon-bare:active:not(:disabled), .icon-bare[aria-expanded="true"] { background: var(--line); color: var(--ink); }
+/* 「メモを開く」:文字ラベル付きの丸いボタン(−・＋などの四角いアイコンボタンと見た目を分ける) */
+.memo-btn, #memo-add {
+  flex: none; min-width: 96px; height: var(--ctl-h); padding: 0 14px;
+  font: inherit; font-size: 14px; font-weight: 800; line-height: 1; white-space: nowrap;
+  color: #fff; background: var(--accent); border: 2px solid var(--accent); border-radius: calc(var(--ctl-h) / 2);
+  touch-action: manipulation;
+}
+.memo-btn:active, #memo-add:active { filter: brightness(.9); }
+#memo-open[aria-expanded="true"] { background: #8a3a1e; border-color: #8a3a1e; }   /* 予想メモを開いている間 */
+
+/* ---- B 選択数字エリア(固定7枠・メモに追加・クリア) ---- */
+#selection-bar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  padding: 2px 8px;
+  overflow: hidden;
+  background: var(--paper);
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+#picked { flex: 0 0 auto; display: flex; align-items: center; gap: 2px; margin-left: calc(var(--chip) + 2px); }   /* 並びを1枠分(枠+すき間)右へ */
+.chip-slot {
+  flex: 0 0 var(--chip);
+  width: var(--chip);
+  height: var(--chip);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--main-ink);
+  font-size: 12px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.chip-slot.filled { background: var(--main); border-color: var(--main); color: var(--main-ink); }
+#selection-msg { display: none; }
+/* 呼び出し元の予想の表示:選択数字の真下に重ねる(選択数字やボタンの位置・高さには影響しない) */
+#selection-msg:not(:empty) {
+  display: block; position: absolute; left: calc(8px + var(--chip) + 2px); bottom: 1px; max-width: calc(7 * var(--chip) + 6 * 2px);
+  font-size: 9px; line-height: 1.15; font-weight: 700; color: var(--accent); overflow: hidden; text-overflow: ellipsis;
+}
+#memo-add { margin-left: auto; }
+#memo-add.short { color: var(--accent); background: #fff; }   /* 7個に満たないとき:ふち取りの見た目(押すと不足を表示) */
+#clear-btn {
+  flex: none; margin-left: 7px; width: 40px; height: 40px; padding: 0; display: flex; align-items: center; justify-content: center;
+  color: var(--ink); background: var(--paper-alt); border: 1px solid var(--ink); border-radius: 8px; touch-action: manipulation;
+}
+#clear-btn:active:not(:disabled) { background: var(--line); }
+#clear-btn:disabled { opacity: .35; }
+
+
+/* ---- 色設定パネル(重ねて表示) ---- */
+#color-panel, #csv-msg {
+  position: absolute;
+  z-index: 30;
+  top: var(--stat-h);
+  right: calc(env(safe-area-inset-right, 0px) + 6px);
+  width: min(400px, calc(100% - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px) - 12px));
+  max-height: calc(100% - var(--stat-h) - env(safe-area-inset-bottom, 0px) - 8px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 8px 10px 10px;
+  background: var(--paper);
+  border: 1px solid var(--ink);
+  border-radius: 10px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, .28);
+  font-size: 13px;
+  touch-action: manipulation;
+}
+#color-panel[hidden], #csv-msg[hidden] { display: none; }
+.cp-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.cp-title { font-weight: 800; font-size: 14px; }
+.cp-row { display: flex; align-items: center; gap: 8px; padding: 4px 0; border-top: 1px solid var(--line); }
+.cp-sample {
+  flex: none; width: 30px; height: 28px; display: flex; align-items: center; justify-content: center;
+  border-radius: 4px; font-weight: 700; font-size: 14px; font-variant-numeric: tabular-nums;
+  background: var(--main); color: var(--main-ink);
+}
+.cp-row[data-kind="bonus"] .cp-sample { background: var(--bonus); color: var(--bonus-ink); }
+.cp-name { flex: none; width: 4.6em; font-weight: 700; }
+.cp-swatches { flex: 1 1 auto; min-width: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.cp-swatch {
+  width: 30px; height: 30px; padding: 0; border-radius: 50%;
+  border: 2px solid var(--paper); box-shadow: 0 0 0 1px var(--ink);
+  touch-action: manipulation;
+}
+.cp-swatch.on { box-shadow: 0 0 0 2px var(--ink), inset 0 0 0 2px #fff; }
+.cp-free { flex: none; display: flex; align-items: center; gap: 4px; font-weight: 700; }
+.cp-free input[type="color"] { width: 38px; height: 30px; padding: 0; border: 1px solid var(--ink); border-radius: 6px; background: none; }
+.cp-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; }
+#cp-warn { color: var(--main); font-weight: 700; font-size: 12px; }
+#cp-warn[hidden] { display: none; }
+#cp-close, #cp-reset, #csv-msg-close {
+  height: 30px; padding: 0 12px; font: inherit; font-weight: 700; color: var(--ink);
+  background: var(--paper-alt); border: 1px solid var(--ink); border-radius: 6px; touch-action: manipulation;
+}
+#cp-reset { margin-left: auto; }
+#cp-close:active, #cp-reset:active, #csv-msg-close:active { background: var(--line); }
+
+/* ---- CSV読み込み ---- */
+.file-hidden { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+#csv-msg-body { font-size: 13px; line-height: 1.5; white-space: normal; user-select: text; -webkit-user-select: text; }
+#csv-msg-body ul { margin: 4px 0 0; padding-left: 1.2em; }
+#csv-msg.err { border-color: var(--main); border-width: 2px; }
+#csv-msg.err .cp-title { color: var(--main); }
+
+
+/* v3.7: shake only the seven selected slots when an eighth number is rejected */
+#picked.limit-shake .chip-slot {
+  animation: picked-limit-shake .28s ease-in-out;
+}
+@keyframes picked-limit-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-3px); }
+  40% { transform: translateX(3px); }
+  60% { transform: translateX(-2px); }
+  80% { transform: translateX(2px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  #picked.limit-shake .chip-slot { animation: none; }
+}
+
+/* ================= v4.0 予想メモ ================= */
+
+/* ---- 予想メモ(ボトムシート):画面の下半分が目安。A・Bは隠さず、背景の暗幕もなし ---- */
+#memo-screen {
+  position: absolute; z-index: 40;
+  left: env(safe-area-inset-left, 0px); right: env(safe-area-inset-right, 0px); bottom: 0;
+  /* 高さは2段階。1=通常(従来と同じ) / 2=最大(従来の第3段階と同じ。上部の操作バーは隠さない)。data-level で切り替える */
+  --mh1: min(max(50%, 200px), calc(100% - var(--stat-h) - var(--pick-h) - 44px));   /* 横向きでも出目表が2〜3行は見えるよう、最小は200px */
+  --mh2: calc(100% - var(--stat-h) - var(--pick-h));
+  height: var(--mh1);
+  display: flex; flex-direction: column;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  background: var(--paper);
+  border: 1px solid var(--ink); border-bottom: 0; border-radius: 14px 14px 0 0;
+  box-shadow: 0 -6px 20px rgba(0, 0, 0, .25);
+  transform: translateY(100%);
+  transition: transform .22s ease-out, height .2s ease-out;
+}
+#memo-screen[data-level="2"] { height: var(--mh2); }
+#memo-screen.open { transform: translateY(0); }
+#memo-screen.dragging { transition: none; }
+#memo-screen[hidden] { display: none; }
+@media (prefers-reduced-motion: reduce) { #memo-screen { transition: none; } }
+/* 閉じる操作(下スワイプ)はこの上部だけ。一覧のスクロールとは別の領域にして干渉を避ける */
+#memo-top { flex: none; padding: 6px 8px 0 12px; touch-action: none; cursor: grab; }
+#memo-grip { display: block; width: 40px; height: 5px; margin: 0 auto 2px; border-radius: 3px; background: #b5b1a3; }
+#memo-top-row { display: flex; align-items: center; justify-content: space-between; }
+#memo-close {
+  width: 44px; height: 40px; padding: 0; font: inherit; font-size: 26px; line-height: 1; font-weight: 700;
+  color: var(--ink); background: var(--paper-alt); border: 1px solid var(--ink); border-radius: 8px; touch-action: manipulation;
+}
+#memo-close:active { background: var(--line); }
+
+#memo-head { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 6px 8px; border-bottom: 1px solid var(--line); font-size: 13px; }
+#memo-round-label { display: flex; align-items: center; gap: 4px; font-weight: 700; }
+#memo-round { height: 32px; font: inherit; font-size: 14px; font-weight: 700; color: var(--ink); background: var(--paper-alt); border: 1px solid var(--ink); border-radius: 6px; padding: 0 4px; max-width: 12em; }
+#memo-target { font-weight: 800; color: var(--accent); }
+#memo-filter { display: flex; gap: 6px; margin-left: auto; }
+#memo-filter button {
+  height: 32px; padding: 0 10px; font: inherit; font-size: 13px; font-weight: 700; color: var(--ink);
+  background: var(--paper-alt); border: 1px solid var(--ink); border-radius: 16px; touch-action: manipulation;
+}
+#memo-filter button[aria-pressed="true"] { background: var(--ink); color: #fff; }
+.mf-n { margin-left: 4px; font-weight: 600; opacity: .85; }
+#memo-warn { flex: none; padding: 6px 10px; font-size: 12px; font-weight: 700; color: #fff; background: var(--accent); }
+#memo-warn[hidden] { display: none; }
+#memo-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding: 6px 0 10px; }
+.memo-empty { padding: 24px 16px; text-align: center; font-size: 14px; line-height: 1.6; color: #5b5f66; }
+
+.memo-card {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px;
+  margin: 0 8px 6px; padding: 5px 8px;
+  background: #fff; border: 1px solid var(--line); border-left: 5px solid var(--line); border-radius: 8px;
+}
+.memo-card.buy { border-left-color: #e0a800; background: #fffaea; }
+.memo-card.maybe { border-left-color: #3b6fb6; background: #f0f5fc; }
+.memo-card.flash { animation: memo-flash 1.4s ease-out; }
+@keyframes memo-flash { 0%, 40% { box-shadow: 0 0 0 3px var(--accent); } 100% { box-shadow: 0 0 0 0 transparent; } }
+.mc-id { flex: none; min-width: 3.9em; display: flex; flex-direction: column; line-height: 1.2; }
+.mc-label { font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.mc-from { padding: 0; margin: 0; border: 0; background: none; font: inherit; font-size: 10px; font-weight: 700; color: var(--accent); text-align: left; text-decoration: underline; touch-action: manipulation; }
+.mc-nums { flex: 1 1 auto; min-width: 0; display: flex; flex-wrap: nowrap; gap: 3px; }
+.mc-num {
+  flex: 0 0 auto; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
+  border-radius: 4px; background: var(--main); color: var(--main-ink);
+  font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums;
+}
+.mc-actions { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+.mc-actions button {
+  height: 32px; padding: 0 9px; font: inherit; font-size: 13px; font-weight: 700; color: var(--ink);
+  background: var(--paper-alt); border: 1px solid var(--ink); border-radius: 6px; touch-action: manipulation;
+}
+.mc-actions .mc-mark { min-width: 36px; padding: 0; font-size: 17px; line-height: 1; }
+.mc-actions .mc-mark[aria-pressed="true"][data-mark="buy"] { background: #e0a800; border-color: #8a6700; }
+.mc-actions .mc-mark[aria-pressed="true"][data-mark="maybe"] { background: #3b6fb6; border-color: #24467a; color: #fff; }
+.mc-actions .mc-del { color: #a11a1a; border-color: #a11a1a; }
+.mc-actions button:active { filter: brightness(.9); }
+
+/* 確認ダイアログ・お知らせ・結果メッセージ */
+#confirm { position: absolute; inset: 0; z-index: 80; display: flex; align-items: center; justify-content: center; padding: 12px; background: rgba(0, 0, 0, .45); }
+#confirm[hidden] { display: none; }
+.cf-box { width: min(420px, 100%); padding: 12px 14px; background: var(--paper); border: 1px solid var(--ink); border-radius: 10px; box-shadow: 0 8px 24px rgba(0, 0, 0, .35); }
+.cf-title { font-size: 15px; font-weight: 800; margin-bottom: 4px; }
+.cf-text { font-size: 13px; line-height: 1.5; margin-bottom: 10px; word-break: break-all; }
+.cf-btns { display: flex; justify-content: flex-end; gap: 10px; }
+.cf-btns button { height: 36px; padding: 0 14px; font: inherit; font-size: 14px; font-weight: 800; color: var(--ink); background: var(--paper-alt); border: 1px solid var(--ink); border-radius: 8px; touch-action: manipulation; }
+.cf-btns button.danger { color: #fff; background: #a11a1a; border-color: #a11a1a; }
+.cf-btns button.primary { color: #fff; background: var(--ink); }
+#toast {
+  position: absolute; z-index: 90; left: 50%; transform: translateX(-50%);
+  top: calc(var(--stat-h) + var(--pick-h) + 8px);   /* 選択数字エリアの下(ボトムシートとは重ならない) */
+  max-width: calc(100% - 24px); padding: 8px 14px; border-radius: 8px;
+  background: rgba(35, 38, 43, .95); color: #fff; font-size: 13px; font-weight: 700; line-height: 1.4; text-align: center; pointer-events: none;
+}
+#toast.warn { background: #a11a1a; }
+#toast[hidden] { display: none; }
+#csv-msg { z-index: 70; }   /* 予想メモ(z=40)や設定パネルより前に出す */
+
+/* ---- 設定パネル(操作バーの下に重ねる。表示回数 → CSV読み込み・更新 → 色設定) ---- */
+#settings-backdrop { position: absolute; inset: 0; z-index: 34; }
+#settings-backdrop[hidden] { display: none; }
+#settings-panel {
+  position: absolute; z-index: 35;
+  top: var(--stat-h);
+  right: calc(env(safe-area-inset-right, 0px) + 6px);
+  width: min(400px, calc(100% - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px) - 12px));
+  max-height: calc(100% - var(--stat-h) - env(safe-area-inset-bottom, 0px) - 8px);
+  overflow-y: auto; overscroll-behavior: contain;
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 8px 10px 10px;
+  background: var(--paper); border: 1px solid var(--ink); border-radius: 10px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, .28);
+  touch-action: manipulation;
+}
+#settings-panel[hidden] { display: none; }
+#settings-panel .cp-head { margin-bottom: 0; }
+#settings-panel > * { flex-shrink: 0; }   /* 中身がパネルより長いとき(横向きなど)、ボタンを縮めずにスクロールさせる */
+/* 縦画面では設定パネルを画面下側に置き、高さを画面の約60%までにして、パネルの上側から出目表が見えるようにする(中身は従来どおりパネル内で縦スクロール)。
+   下端はホームバー(セーフエリア)+8px の余白を空ける。60dvh に対応していない古いブラウザは 60vh を使う。従来の上限(操作バーの下〜画面下端)より高くはしない。横画面は対象外 */
+@media (orientation: portrait) {
+  #settings-panel {
+    top: auto;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 8px);
+    max-height: min(60vh, calc(100% - var(--stat-h) - env(safe-area-inset-bottom, 0px) - 8px));
+    max-height: min(60dvh, calc(100% - var(--stat-h) - env(safe-area-inset-bottom, 0px) - 8px));
+  }
+}
+#sp-close {
+  height: 30px; padding: 0 12px; font: inherit; font-weight: 700; color: var(--ink);
+  background: var(--paper-alt); border: 1px solid var(--ink); border-radius: 6px; touch-action: manipulation;
+}
+#sp-close:active { background: var(--line); }
+.sp-group { display: flex; flex-direction: column; gap: 4px; }
+.sp-label { font-size: 13px; font-weight: 800; }
+.seg { display: flex; gap: 6px; }
+.seg button {
+  flex: 1 1 0; min-width: 0; height: 44px; padding: 0;
+  font: inherit; font-size: 15px; font-weight: 700; color: var(--ink);
+  background: var(--paper-alt); border: 1px solid var(--ink); border-radius: 8px; touch-action: manipulation;
+}
+.seg button:active { background: var(--line); }
+.seg button[aria-pressed="true"] { background: var(--ink); color: #fff; }
+.sp-item {
+  height: 44px; padding: 0 14px; text-align: left;
+  font: inherit; font-size: 15px; font-weight: 700; color: var(--ink);
+  background: var(--paper-alt); border: 1px solid var(--ink); border-radius: 8px; touch-action: manipulation;
+}
+.sp-item:active { background: var(--line); }
+.sp-item[aria-expanded="true"] { background: var(--ink); color: #fff; }
+
+/* 設定パネル: 抽選データ(現在使用中の抽選データ / 抽選データの選択 / 内蔵データについて) */
+.sp-info { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; font-size: 12px; line-height: 1.4; background: var(--paper-alt); border: 1px dashed var(--line); border-radius: 8px; }
+/* 既存の紙色・線色だけで整理する。①は控えめな背景の枠、②③は区切り線の下 */
+.sp-block { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px 10px; border: 1px solid var(--line); border-radius: 8px; color: var(--ink); }
+.sp-block-current { background: var(--paper-alt); }
+.sp-block-current .sp-info { margin-top: 2px; background: var(--paper); }   /* 枠の背景と区別するため、情報欄は明るい紙色 */
+.sp-block-title { margin: 0 0 2px; padding-left: 7px; border-left: 3px solid var(--ink); font-size: 13px; font-weight: 800; line-height: 1.3; }
+.sp-sep { width: 100%; margin: 2px 0; border: 0; border-top: 1px solid var(--line); }
+.sp-choice { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }   /* CSV読み込み | 内蔵データ読み込み */
+.sp-choice .sp-item { min-width: 0; padding: 0 8px; text-align: center; white-space: nowrap; }
+@media (max-width: 359px) { .sp-choice { grid-template-columns: 1fr; } }   /* ごく狭い画面では縦に並べる(文字の途中改行を防ぐ) */
+.sp-builtin-note { padding: 0 2px; color: var(--ink); }
+.sp-builtin-text { margin: 2px 0 0; font-size: 11px; line-height: 1.5; opacity: .75; }   /* 穏やかな補足として控えめに */
+.sp-builtin-text span { display: inline-block; }   /* 文の切れ目で改行する(1文が1行に収まらない狭い画面では文の中でも折り返す) */
+.sp-info-row { display: flex; gap: 8px; }
+.sp-info-k { flex: 0 0 6.5em; white-space: nowrap; font-weight: 800; }   /* 項目名は1行(最長6文字)。長い値は値側で折り返す */
+.sp-info-v { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.sp-builtin-latest { margin: 0; font-size: 12px; font-weight: 700; line-height: 1.4; color: var(--ink); }   /* 内蔵データファイルの最新回(現在の抽選データとは別) */
+
+/* 予想メモ: 開いている回をまとめて削除 */
+#memo-del-all { height: 32px; padding: 0 10px; font: inherit; font-size: 12px; font-weight: 700; color: #a11a1a; background: var(--paper-alt); border: 1px solid #a11a1a; border-radius: 16px; touch-action: manipulation; }
+#memo-del-all:disabled { opacity: .4; }
+
+/* ================= v4.4 スマホ横向き:操作エリアを1段にする =================
+   横向き(高さ500px以下)かつ幅656px以上のときだけ適用。縦向き・iPad・幅の狭い横向きは従来の2段のまま。
+   HTMLは変更しない。#status-bar と #selection-bar を display:contents にして、中の部品を #app のグリッドへ直接並べる。
+   並び順: 縮尺(7・−・＋) | 選択数字 | メモを開く・メモに追加・削除・設定。区切りは #picked の擬似要素(薄いグレーの縦線2本)。 */
+@media (orientation: landscape) and (max-height: 500px) and (min-width: 656px) {
+  :root { --pick-h: 0px; }   /* 選択数字バーの行がなくなる(パネル・トースト・メモシートの位置はこの変数から追従) */
+  #app {
+    grid-template-columns: 36px 44px 44px minmax(0, 1fr) auto minmax(0, 1fr) auto auto 40px 44px;
+    grid-template-rows: 30px 48px minmax(0, 1fr);   /* タイトル(従来どおり残す) / 操作行 / 出目表 */
+    column-gap: 6px;
+    padding-left: calc(env(safe-area-inset-left, 0px) + 8px);
+    padding-right: calc(env(safe-area-inset-right, 0px) + 8px);
+  }
+  #app-title { grid-column: 1 / -1; grid-row: 1; }
+  #status-bar, #selection-bar { display: contents; }
+  .bar-spacer { display: none; }
+  #game-label { grid-area: 2 / 1; align-self: center; }
+  #zoom-out { grid-area: 2 / 2; align-self: center; }
+  #zoom-in { grid-area: 2 / 3; align-self: center; }
+  #picked { grid-area: 2 / 5; align-self: center; margin-left: 0; position: relative; }
+  #picked::before, #picked::after { content: ''; position: absolute; top: 50%; height: 28px; margin-top: -14px; width: 1px; background: var(--line); }
+  #picked::before { left: -6px; }
+  #picked::after { right: -6px; }
+  /* 呼び出し元の表示:選択数字と同じセル(4値指定でセル全体)を基準に、チップの真下へ(縦向きと同じ位置関係) */
+  #selection-msg { grid-area: 2 / 5 / 3 / 6; }
+  #selection-msg:not(:empty) { left: 0; bottom: 1px; max-width: 100%; }
+  #memo-open { grid-area: 2 / 7; align-self: center; }
+  #memo-add { grid-area: 2 / 8; align-self: center; margin-left: 0; }
+  #clear-btn { grid-area: 2 / 9; align-self: center; margin-left: 0; }
+  #settings-btn { grid-area: 2 / 10; align-self: center; }
+  #work { grid-column: 1 / -1; grid-row: 3; border-top: 1px solid var(--line); }
+}
